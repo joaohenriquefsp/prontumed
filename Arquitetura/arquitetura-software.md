@@ -1,0 +1,282 @@
+# Arquitetura de Software — ProntuMed
+
+> Documento de referência arquitetural. Use como contexto para desenvolvimento com Claude Code.
+
+---
+
+## Visão Geral
+
+Sistema de gestão clínica baseado em microsserviços, projetado para clínicas médicas gerais com capacidade de escala para hospitais. Arquitetura orientada a eventos com comunicação assíncrona via Kafka e comunicação síncrona via BFF NestJS.
+
+**Tipo:** Single-tenant (MVP) → Multi-tenant via schema isolation (v2)  
+**Domínio:** Clínica médica geral (clínico geral + especialistas)  
+**MVP:** Agendamento + Prontuário eletrônico + Notificações
+
+---
+
+## Frontends — 2 clientes
+
+### Portal Web
+- **Tecnologia:** Next.js 14 (App Router)
+- **Perfis atendidos:** Médico, Recepcionista, Admin, Paciente
+- **Separação:** Por role — cada perfil tem layout, rotas e permissões próprias via RBAC
+- **Responsabilidades:**
+  - Médico: agenda do dia, prontuário, histórico de pacientes
+  - Recepcionista: agendamentos, cadastro de pacientes, agenda geral
+  - Admin: gestão de usuários, configurações da clínica
+  - Paciente: consultas agendadas, histórico básico, notificações
+
+### App Mobile
+- **Tecnologia:** React Native + Expo
+- **Perfis atendidos:** Médico + Paciente
+- **Separação:** Por role — navegação e telas distintas por perfil
+- **Responsabilidades:**
+  - Médico: agenda do dia, acesso ao prontuário, push de novos agendamentos
+  - Paciente: acompanhamento de consultas, push de confirmações e lembretes
+
+> Ambos os clientes consomem exclusivamente o BFF NestJS. Nenhum frontend fala diretamente com microsserviços .NET.
+
+---
+
+## Camada de Entrada — BFF NestJS
+
+Único ponto de entrada para todos os frontends. Responsável por:
+
+- Validação de tokens JWT (OAuth2)
+- Autorização RBAC por rota
+- Roteamento para microsserviços internos
+- Composição de respostas (agregação de dados de múltiplos serviços)
+- Assinatura HMAC em todas as chamadas para serviços internos
+- Rate limiting por cliente
+
+**Porta:** `3000`  
+**Tecnologia:** NestJS + Passport.js + HMAC request signing
+
+---
+
+## Bounded Contexts — 5 Microsserviços .NET
+
+Cada microsserviço é um projeto .NET Core independente com banco de dados próprio (Database per Service pattern), seguindo DDD + Clean Architecture internamente.
+
+### 1. Identity Service
+**Porta:** `5001`  
+**Banco:** `db_identity`  
+**Responsabilidade:** Autenticação, gestão de usuários, roles e permissões. Emite e valida JWTs.
+
+**Eventos publicados:**
+- `UserCreated`
+- `UserRoleChanged`
+- `PasswordReset`
+
+---
+
+### 2. Patient Service
+**Porta:** `5002`  
+**Banco:** `db_patients`  
+**Responsabilidade:** Cadastro de pacientes, dados pessoais, contatos. CQRS separando leitura de escrita.
+
+**Eventos publicados:**
+- `PatientCreated`
+- `PatientUpdated`
+- `PatientDeactivated`
+
+---
+
+### 3. Appointment Service
+**Porta:** `5003`  
+**Banco:** `db_appointments`  
+**Responsabilidade:** Agendamento, cancelamento, controle de agenda médica. Saga Pattern para consistência distribuída.
+
+**Eventos publicados:**
+- `AppointmentScheduled`
+- `AppointmentCancelled`
+- `AppointmentCompleted`
+- `SlotBlocked`
+
+---
+
+### 4. Medical Record Service
+**Porta:** `5004`  
+**Banco:** `db_medical_records`  
+**Responsabilidade:** Prontuário eletrônico. Somente médico escreve e visualiza. Histórico imutável via Event Sourcing.
+
+**Eventos publicados:**
+- `RecordCreated`
+- `ConsultationNoteAdded`
+- `RecordAccessed` *(auditoria LGPD)*
+
+---
+
+### 5. Notification Service
+**Porta:** worker (sem API REST)  
+**Banco:** `db_notifications` *(apenas log de entregas)*  
+**Responsabilidade:** Worker puro. Consome eventos Kafka e dispara notificações via Email e Push.
+
+**Eventos consumidos:**
+- `AppointmentScheduled` → email + push de confirmação para paciente e médico
+- `AppointmentCancelled` → email + push de cancelamento
+- `AppointmentCompleted` → push solicitando feedback ao paciente
+
+---
+
+## Estrutura Interna — DDD + Clean Architecture
+
+Todos os microsserviços seguem a mesma estrutura de camadas. A regra de dependência aponta sempre para dentro: `API → Application → Domain`. Infrastructure implementa interfaces definidas no Domain.
+
+```
+Service/
+├── Domain/           # Entidades, Value Objects, Domain Events, interfaces de repositório
+├── Application/      # Commands, Queries, Handlers (MediatR), DTOs, Validators
+├── Infrastructure/   # EF Core, Repositórios, Kafka publisher, Outbox
+└── API/              # Controllers, Middlewares, Program.cs
+```
+
+### Padrões aplicados por camada
+
+| Camada | Padrões |
+|---|---|
+| Domain | Aggregate Root, Value Objects, Domain Events, Repository Interface |
+| Application | CQRS, MediatR, FluentValidation, Use Cases |
+| Infrastructure | EF Core, Outbox Pattern, Kafka Publisher, Debezium CDC |
+| API | Minimal API / Controllers, HMAC Middleware, Health Checks |
+
+---
+
+## Comunicação entre Serviços
+
+### Síncrona — REST
+- Fluxo: `Frontend → BFF → Serviço`
+- Usado para leitura de dados e comandos que precisam de resposta imediata
+- BFF assina cada request com HMAC antes de rotear para serviços internos
+- Serviços rejeitam qualquer chamada sem assinatura HMAC válida (Zero Trust interno)
+
+### Assíncrona — Kafka (Event-Driven)
+- Eventos de domínio entre serviços
+- Outbox Pattern garante entrega mesmo com Kafka indisponível
+- Debezium monitora WAL do PostgreSQL e publica na tabela `outbox_events` → tópico Kafka
+- Notification Service é consumidor puro — nunca produz eventos de domínio
+
+### Outbox + Debezium — fluxo detalhado
+
+```
+1. Serviço salva entidade + evento em outbox_events (mesma transação SQL)
+2. Debezium lê WAL do PostgreSQL (Change Data Capture)
+3. Debezium publica evento no tópico Kafka correspondente
+4. Consumer (ex: Notification Service) consome e processa
+5. Outbox marca evento como publicado
+```
+
+> Garante at-least-once delivery sem two-phase commit e sem acoplamento ao broker.
+
+---
+
+## Segurança
+
+| Mecanismo | Onde | Descrição |
+|---|---|---|
+| OAuth2 + PKCE | BFF + Identity Service | Autenticação de usuários. PKCE obrigatório para app mobile |
+| JWT (short-lived) | BFF | Tokens de curta duração (15min) + refresh token (7 dias) |
+| RBAC | BFF (guards) | 4 roles: `Patient`, `Doctor`, `Receptionist`, `Admin` |
+| HMAC | BFF → Serviços internos | Assina cada request interno. Serviços rejeitam sem assinatura |
+| LGPD | Medical Record + Patient | Dados sensíveis criptografados at rest, soft delete com anonimização, log de acesso |
+
+---
+
+## Bancos de Dados
+
+| Serviço | Banco | Porta | Observação |
+|---|---|---|---|
+| Identity | `db_identity` | 5432 | users, roles, permissions, refresh_tokens |
+| Patient | `db_patients` | 5433 | patients, contacts, outbox_events |
+| Appointment | `db_appointments` | 5434 | appointments, schedules, saga_state, outbox_events |
+| Medical Record | `db_medical_records` | 5435 | event_store (Event Sourcing), outbox_events |
+| Notification | `db_notifications` | 5436 | delivery_logs, templates |
+
+> Nenhum serviço acessa o banco de outro serviço diretamente. Comunicação sempre via evento ou API.
+
+---
+
+## Infraestrutura — Docker Compose
+
+```
+# Bancos
+postgres-identity       :5432
+postgres-patients       :5433
+postgres-appointments   :5434
+postgres-medical        :5435
+postgres-notifications  :5436
+
+# Mensageria
+zookeeper               (interno)
+kafka                   :9092
+kafka-ui                :8080  ← visualizar tópicos em dev
+debezium-connect        :8083
+
+# Serviços
+identity-service        :5001
+patient-service         :5002
+appointment-service     :5003
+medical-record-service  :5004
+notification-service    (worker)
+gateway                 :3000  ← entry point único
+```
+
+---
+
+## Fluxo Principal — Agendamento de Consulta
+
+```
+1. Recepcionista abre agenda
+   → Portal Web → BFF → Professional/Appointment Service (GET disponibilidade)
+
+2. Recepcionista confirma agendamento
+   → Portal Web → BFF → Appointment Service (POST)
+   → Salva appointment + outbox_events (mesma transação)
+
+3. Debezium captura
+   → Lê WAL de db_appointments
+   → Publica AppointmentScheduled no Kafka
+
+4. Notification Service consome
+   → Dispara email + push para paciente
+   → Dispara push para médico
+
+5. Portal Web e App recebem push em tempo real
+```
+
+---
+
+## Decisões Arquiteturais (ADRs)
+
+### ADR-001 — Microsserviços ao invés de monolito modular
+**Decisão:** Microsserviços independentes por Bounded Context  
+**Motivo:** Escalabilidade independente por domínio. Em escala hospitalar, prontuário pode ter requisitos de compliance que exigem deploy isolado. Appointment e Notification têm picos de uso distintos.
+
+### ADR-002 — Event Sourcing apenas no Medical Record
+**Decisão:** Event Sourcing restrito ao prontuário  
+**Motivo:** CFM e LGPD exigem rastreabilidade total e imutabilidade do histórico clínico. Nos demais serviços o custo de complexidade não justifica o benefício.
+
+### ADR-003 — Outbox + Debezium ao invés de publicação direta no Kafka
+**Decisão:** Outbox Pattern com CDC via Debezium  
+**Motivo:** Publicação direta no Kafka após save no banco cria janela de falha. O Outbox salva na mesma transação. Debezium entrega quando Kafka estiver disponível. Zero perda de eventos.
+
+### ADR-004 — BFF NestJS ao invés de API Gateway genérico
+**Decisão:** Backend For Frontend dedicado  
+**Motivo:** Cada cliente (web, mobile) tem necessidades distintas de composição de dados. O BFF agrega respostas específicas por cliente, evitando over-fetching no frontend.
+
+### ADR-005 — Single-tenant no MVP
+**Decisão:** Single-tenant com estrutura preparada para multi-tenant  
+**Motivo:** Multi-tenant via tenant_id aumenta risco de vazamento de dados e complexidade de queries. A migração para multi-tenant via schema isolation é possível sem reescrita dos serviços.
+
+---
+
+## Escalabilidade para Hospital
+
+A arquitetura atual suporta evolução para hospital adicionando novos Bounded Contexts sem alterar os existentes:
+
+- `Billing Service` — faturamento e convênios
+- `Pharmacy Service` — estoque e dispensação
+- `Lab Service` — exames e resultados
+- `Bed Management Service` — internações
+- `Multi-tenant` — múltiplas unidades via schema isolation
+

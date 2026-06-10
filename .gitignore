@@ -1,0 +1,23 @@
+# Credenciais — nunca commitar
+.env
+
+# .NET
+**/bin/
+**/obj/
+**/*.user
+**/*.suo
+**/.vs/
+
+# Node
+**/node_modules/
+**/.next/
+**/dist/
+**/.turbo/
+
+# Logs
+**/*.log
+**/logs/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,75 @@
+name: PR — Infraestrutura
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "docker-compose.yml"
+      - "infra/**"
+      - ".env.example"
+
+jobs:
+  validar-compose:
+    name: Validar docker-compose.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copiar .env de exemplo
+        run: cp .env.example .env
+
+      - name: Validar sintaxe do docker-compose
+        run: docker compose config --quiet
+
+  validar-sql:
+    name: Validar arquivos SQL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar se todos os bancos têm schema
+        run: |
+          for dir in infra/postgres/*/; do
+            service=$(basename "$dir")
+            if [ ! -f "$dir/01-schema.sql" ]; then
+              echo "ERRO: $service não tem 01-schema.sql"
+              exit 1
+            fi
+            echo "OK: $service"
+          done
+
+      - name: Verificar sintaxe básica dos arquivos SQL
+        run: |
+          for f in infra/postgres/**/*.sql; do
+            # Garante que o arquivo não está vazio
+            if [ ! -s "$f" ]; then
+              echo "ERRO: $f está vazio"
+              exit 1
+            fi
+            echo "OK: $f"
+          done
+
+  validar-conectores-debezium:
+    name: Validar conectores Debezium (JSON)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar JSON dos conectores
+        run: |
+          for f in infra/debezium/connectors/*.json; do
+            python3 -c "import json,sys; json.load(open('$f'))" \
+              && echo "OK: $f" \
+              || { echo "ERRO: $f tem JSON inválido"; exit 1; }
+          done
+
+      - name: Verificar se todos os conectores têm topic.prefix=prontumed
+        run: |
+          for f in infra/debezium/connectors/*.json; do
+            prefix=$(python3 -c "import json; d=json.load(open('$f')); print(d['config'].get('topic.prefix',''))")
+            if [ "$prefix" != "prontumed" ]; then
+              echo "ERRO: $f tem topic.prefix='$prefix' (esperado: 'prontumed')"
+              exit 1
+            fi
+            echo "OK: $f → topic.prefix=$prefix"
+          done

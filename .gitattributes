@@ -1,0 +1,8 @@
+# Normaliza line endings para LF em todos os arquivos de texto
+* text=auto eol=lf
+
+# Scripts shell sempre com LF (necessário para rodar no Linux/Docker)
+*.sh text eol=lf
+
+# Binários
+*.pdf binary
