@@ -20,13 +20,13 @@ jobs:
           dotnet-version: "10.x"
 
       - name: Restaurar dependências
-        run: dotnet restore services/appointment/AppointmentService.sln
+        run: dotnet restore services/appointment/AppointmentService.slnx
 
       - name: Build
-        run: dotnet build services/appointment/AppointmentService.sln --no-restore --configuration Release
+        run: dotnet build services/appointment/AppointmentService.slnx --no-restore --configuration Release
 
       - name: Verificar formatação
-        run: dotnet format services/appointment/AppointmentService.sln whitespace --verify-no-changes --no-restore
+        run: dotnet format services/appointment/AppointmentService.slnx whitespace --verify-no-changes --no-restore
 
   test:
     name: Testes
@@ -43,7 +43,7 @@ jobs:
           dotnet-version: "10.x"
 
       - name: Restaurar dependências
-        run: dotnet restore services/appointment/AppointmentService.sln
+        run: dotnet restore services/appointment/AppointmentService.slnx
 
       - name: Executar testes
-        run: dotnet test services/appointment/AppointmentService.sln --no-restore --configuration Release
+        run: dotnet test services/appointment/AppointmentService.slnx --no-restore --configuration Release

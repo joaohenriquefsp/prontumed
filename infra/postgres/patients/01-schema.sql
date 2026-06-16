@@ -14,32 +14,34 @@
 -- Contém o cadastro completo do paciente como pessoa.
 -- Não armazena dados clínicos (prontuário fica no Medical Record Service).
 --
--- IMPORTANTE: o campo id_usuario referencia o usuário no Identity Service,
--- mas NÃO é uma chave estrangeira real (sem REFERENCES), porque cada
--- serviço tem seu próprio banco isolado — comunicação entre serviços
--- ocorre apenas por eventos Kafka, nunca por JOIN entre bancos.
+-- IMPORTANTE: id_usuario é uma referência lógica ao usuário no Identity Service,
+-- mas NÃO é FK real (sem REFERENCES), pois cada serviço tem banco isolado.
+-- Comunicação entre serviços ocorre apenas via eventos Kafka, nunca por JOIN.
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS pacientes (
 
     -- Identificador único do paciente no sistema
     id                  UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- ID do usuário correspondente no Identity Service.
-    -- Permite ao BFF vincular o login do paciente ao seu cadastro clínico.
-    -- Não é FK real pois os bancos são isolados (Database per Service).
-    id_usuario          UUID         NOT NULL UNIQUE,
+    -- ID do usuário correspondente no Identity Service (opcional no MVP).
+    -- Permite vincular o login do paciente ao seu cadastro clínico.
+    -- Nullable: paciente pode ser cadastrado antes de ter conta de acesso.
+    id_usuario          UUID         UNIQUE,
 
-    -- Nome completo do paciente (como consta no documento)
-    nome_completo       VARCHAR(200) NOT NULL,
+    -- Nome completo do paciente (separado em dois campos para ordenação e busca)
+    primeiro_nome       VARCHAR(100) NOT NULL,
+    sobrenome           VARCHAR(100) NOT NULL,
 
-    -- CPF no formato '000.000.000-00' — único por paciente
-    cpf                 VARCHAR(14)  NOT NULL UNIQUE,
+    -- CPF armazenado apenas com dígitos (11 caracteres), sem pontuação.
+    -- A formatação '000.000.000-00' é responsabilidade do BFF ao exibir.
+    -- Dígito verificador validado na camada de domínio do serviço.
+    cpf                 VARCHAR(11)  NOT NULL UNIQUE,
 
     -- Data de nascimento — usada para calcular idade e para identificação
     data_nascimento     DATE         NOT NULL,
 
     -- Sexo biológico do paciente (relevante para diagnósticos)
-    -- Valores: 'Male' | 'Female' | 'Other'
+    -- Valores: 'Masculino' | 'Feminino' | 'Outro'
     sexo                VARCHAR(20),
 
     -- Telefone principal para contato e envio de notificações
@@ -48,12 +50,11 @@ CREATE TABLE IF NOT EXISTS pacientes (
     -- E-mail do paciente (pode ser diferente do e-mail de login)
     email               VARCHAR(255),
 
-    -- Endereço residencial — armazenado inline para simplificar o MVP.
-    -- Em versões futuras pode ser extraído para uma tabela de endereços.
-    endereco_logradouro VARCHAR(255),  -- Logradouro e número
-    endereco_cidade     VARCHAR(100),  -- Cidade
-    endereco_uf         VARCHAR(2),    -- UF (ex: 'SP', 'RJ')
-    endereco_cep        VARCHAR(10),   -- CEP
+    -- Endereço residencial — campos separados para facilitar busca e filtragem
+    endereco_logradouro VARCHAR(255),
+    endereco_cidade     VARCHAR(100),
+    endereco_uf         VARCHAR(2),
+    endereco_cep        VARCHAR(8),   -- apenas dígitos (ex: '30140110')
 
     -- Pacientes inativados não aparecem nas buscas mas são mantidos
     -- no banco para preservar histórico (exigência LGPD: não deletar dados)
@@ -63,9 +64,10 @@ CREATE TABLE IF NOT EXISTS pacientes (
     atualizado_em       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
--- Índices para as buscas mais comuns na recepção
-CREATE INDEX IF NOT EXISTS idx_pacientes_id_usuario ON pacientes (id_usuario);  -- login → cadastro
-CREATE INDEX IF NOT EXISTS idx_pacientes_cpf        ON pacientes (cpf);         -- busca por CPF na recepção
+CREATE INDEX IF NOT EXISTS idx_pacientes_id_usuario   ON pacientes (id_usuario);
+CREATE INDEX IF NOT EXISTS idx_pacientes_cpf          ON pacientes (cpf);
+CREATE INDEX IF NOT EXISTS idx_pacientes_primeiro_nome ON pacientes (primeiro_nome);
+CREATE INDEX IF NOT EXISTS idx_pacientes_sobrenome     ON pacientes (sobrenome);
 
 
 -- =============================================================
@@ -84,7 +86,6 @@ CREATE TABLE IF NOT EXISTS eventos_saida (
     id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Tipo do agregado — sempre 'Patient' neste banco
-    -- Debezium usa este campo para rotear ao tópico 'prontumed.Patient'
     tipo_agregado  VARCHAR(100) NOT NULL,
 
     -- ID do paciente que originou o evento (vira chave da mensagem Kafka)
@@ -93,7 +94,6 @@ CREATE TABLE IF NOT EXISTS eventos_saida (
     -- Nome do evento: 'PatientCreated' | 'PatientUpdated' | 'PatientDeactivated'
     tipo_evento    VARCHAR(150) NOT NULL,
 
-    -- Dados do evento em JSON — contém os campos relevantes do paciente
     payload        JSONB        NOT NULL,
 
     criado_em      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
