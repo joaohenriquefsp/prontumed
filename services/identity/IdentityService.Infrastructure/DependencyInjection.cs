@@ -1,9 +1,9 @@
 using IdentityService.Application.Interfaces;
-using IdentityService.Domain.Repositorios;
+using IdentityService.Domain.Repositories;
 using IdentityService.Infrastructure.Outbox;
-using IdentityService.Infrastructure.Persistencia;
-using IdentityService.Infrastructure.Persistencia.Repositorios;
-using IdentityService.Infrastructure.Servicos;
+using IdentityService.Infrastructure.Persistence;
+using IdentityService.Infrastructure.Persistence.Repositories;
+using IdentityService.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

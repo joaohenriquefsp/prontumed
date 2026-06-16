@@ -1,7 +1,7 @@
 using System.Text.Json;
 using IdentityService.Application.Interfaces;
 using IdentityService.Domain;
-using IdentityService.Infrastructure.Persistencia;
+using IdentityService.Infrastructure.Persistence;
 
 namespace IdentityService.Infrastructure.Outbox;
 

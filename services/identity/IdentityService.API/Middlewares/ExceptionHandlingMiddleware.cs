@@ -1,6 +1,6 @@
 using System.Text.Json;
 using FluentValidation;
-using IdentityService.Domain.Excecoes;
+using IdentityService.Domain.Exceptions;
 
 namespace IdentityService.API.Middlewares;
 

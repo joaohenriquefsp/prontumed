@@ -156,20 +156,20 @@ O exemplo abaixo usa o Identity Service. Os demais serviços seguem o mesmo padr
 
 ```
 IdentityService.Domain/
-├── Entidades/
+├── Entities/
 │   ├── Usuario.cs                         # Aggregate Root
 │   └── TokenRenovacao.cs                  # Entidade filha
-├── Eventos/
+├── Events/
 │   ├── UsuarioCriadoEvent.cs              # Domain Event
 │   └── PerfilAlteradoEvent.cs
-├── Repositorios/
+├── Repositories/
 │   ├── IUsuarioRepository.cs              # Interface — NUNCA a implementação
 │   └── ITokenRenovacaoRepository.cs
-└── Excecoes/
+└── Exceptions/
     └── UsuarioNaoEncontradoException.cs
 
 IdentityService.Application/
-├── Comandos/                              # Operações que ALTERAM estado
+├── Commands/                              # Operações que ALTERAM estado
 │   ├── CriarUsuario/
 │   │   ├── CriarUsuarioCommand.cs         # O "pedido" (record com os dados)
 │   │   ├── CriarUsuarioCommandHandler.cs  # A lógica — implementa IRequestHandler
@@ -181,47 +181,48 @@ IdentityService.Application/
 │   └── RenovarToken/
 │       ├── RenovarTokenCommand.cs
 │       └── RenovarTokenCommandHandler.cs
-├── Consultas/                             # Operações que LEEM estado (sem efeito colateral)
+├── Queries/                               # Operações que LEEM estado (sem efeito colateral)
 │   ├── ObterUsuarioPorId/
 │   │   ├── ObterUsuarioPorIdQuery.cs      # O "pedido" de leitura
 │   │   └── ObterUsuarioPorIdQueryHandler.cs
 │   └── ListarUsuarios/
 │       ├── ListarUsuariosQuery.cs
 │       └── ListarUsuariosQueryHandler.cs
-├── Comportamentos/
+├── Behaviors/
 │   └── ValidationBehavior.cs              # Executa FluentValidation no pipeline MediatR
 ├── DTOs/
-│   └── TokenDto.cs                        # Tipos compartilhados entre Comandos/Consultas
+│   └── TokenDto.cs                        # Tipos compartilhados entre Commands/Queries
 └── Interfaces/
     ├── IJwtService.cs                     # Interface de serviço externo (domínio não depende de JWT)
     ├── IHashService.cs
     └── IOutboxPublisher.cs
 
 IdentityService.Infrastructure/
-├── Persistencia/
+├── Persistence/
 │   ├── AppDbContext.cs
-│   ├── Configuracoes/                     # Mapeamento EF Core (um arquivo por entidade)
+│   ├── Configurations/                    # Mapeamento EF Core (um arquivo por entidade)
 │   │   ├── UsuarioConfiguration.cs
 │   │   ├── TokenRenovacaoConfiguration.cs
 │   │   └── EventoSaidaConfiguration.cs
-│   └── Repositorios/                      # Implementações concretas das interfaces do Domain
+│   └── Repositories/                      # Implementações concretas das interfaces do Domain
 │       ├── UsuarioRepository.cs           # Implementa IUsuarioRepository
 │       └── TokenRenovacaoRepository.cs
-├── Servicos/
+├── Services/
 │   ├── JwtService.cs                      # Implementa IJwtService
 │   └── BcryptHashService.cs               # Implementa IHashService
 ├── Outbox/
+│   ├── EventoSaida.cs                     # POCO da tabela eventos_saida
 │   └── OutboxPublisher.cs
 └── Migrations/
 
 IdentityService.API/
-├── Controladores/
+├── Controllers/
 │   ├── AuthController.cs
 │   └── UsuariosController.cs
 ├── Middlewares/
 │   ├── HmacValidationMiddleware.cs
 │   └── ExceptionHandlingMiddleware.cs
-├── Requisicoes/
+├── Requests/
 │   ├── AlterarSenhaRequest.cs
 │   └── AlterarPerfilRequest.cs
 └── Program.cs
