@@ -102,31 +102,32 @@ Primeiro microsserviço implementado. Clean Architecture em 4 projetos .NET 10.
 - `PATCH /usuarios/{id}/desativar` — soft delete [Admin]
 - `GET /health` — health check
 
-**Estrutura de pastas (padrão português aplicado a todos os serviços):**
+**Estrutura de pastas (padrão inglês para pastas, português para arquivos/classes/banco):**
 ```
 Servico.Domain/
-├── Entidades/     # Aggregate Roots e entidades filhas
-├── Eventos/       # Domain Events
-├── Repositorios/  # Interfaces de repositório
-└── Excecoes/      # Exceções de domínio
+├── Entities/      # Aggregate Roots e entidades filhas  (ex: Paciente.cs, Usuario.cs)
+├── Events/        # Domain Events                       (ex: PacienteCadastradoEvent.cs)
+├── Repositories/  # Interfaces de repositório           (ex: IPacienteRepository.cs)
+├── Services/      # Serviços de domínio                 (ex: ValidadorCpf.cs)
+└── Exceptions/    # Exceções de domínio                 (ex: PacienteNaoEncontradoException.cs)
 
 Servico.Application/
-├── Comandos/      # Commands (escrita) via MediatR
-├── Consultas/     # Queries (leitura) via MediatR
-├── Comportamentos/# ValidationBehavior
-├── DTOs/          # Tipos de transferência
-└── Interfaces/    # IJwtService, IHashService, IOutboxPublisher
+├── Commands/      # Commands (escrita) via MediatR      (ex: CadastrarPacienteCommand.cs)
+├── Queries/       # Queries (leitura) via MediatR       (ex: ObterPacientePorIdQuery.cs)
+├── Behaviors/     # ValidationBehavior no pipeline
+├── DTOs/          # Tipos de transferência              (ex: PacienteDto.cs)
+└── Interfaces/    # IOutboxPublisher, IJwtService, etc.
 
 Servico.Infrastructure/
-├── Persistencia/  # AppDbContext + Configuracoes + Repositorios
-├── Servicos/      # Implementações técnicas (JWT, Hash)
-├── Outbox/        # OutboxPublisher
+├── Persistence/   # AppDbContext + Configurations + Repositories
+├── Services/      # Implementações técnicas (ex: JwtService.cs, BcryptHashService.cs)
+├── Outbox/        # EventoSaida.cs + OutboxPublisher.cs
 └── Migrations/    # Migrations EF Core
 
 Servico.API/
-├── Controladores/ # Controllers ASP.NET Core
+├── Controllers/   # Controllers ASP.NET Core            (ex: PacientesController.cs)
 ├── Middlewares/   # HMAC + Exception handling
-├── Requisicoes/   # Request DTOs de entrada
+├── Requests/      # Request DTOs de entrada             (ex: CadastrarPacienteRequest.cs)
 └── Program.cs
 ```
 
@@ -139,7 +140,7 @@ Ver `services/identity/README.md` para documentação completa dos endpoints.
 | Decisão | Escolha |
 |---|---|
 | Naming de tabelas/colunas | Português, snake_case |
-| Naming de pastas dentro dos projetos | Português (Entidades, Comandos, Consultas...) |
+| Naming de pastas dentro dos projetos | Inglês (Entities, Commands, Queries, Controllers...) |
 | Naming dos projetos (.csproj) | `NomeServico.Camada` (misto — convenção .NET) |
 | Autenticação serviço ↔ BFF | HMAC-SHA256 (`X-HMAC-Signature` + `X-HMAC-Timestamp`) |
 | Autenticação usuário | Cookie HttpOnly (access 15min + refresh 7d) |

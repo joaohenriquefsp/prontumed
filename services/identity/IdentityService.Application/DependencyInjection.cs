@@ -1,5 +1,5 @@
 using FluentValidation;
-using IdentityService.Application.Comportamentos;
+using IdentityService.Application.Behaviors;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IdentityService.Application;
