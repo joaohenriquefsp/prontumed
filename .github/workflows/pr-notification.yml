@@ -1,0 +1,49 @@
+name: PR — Notification Service
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/notification/**"
+
+jobs:
+  build:
+    name: Build e Formatação
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Restaurar dependências
+        run: dotnet restore services/notification/NotificationService.sln
+
+      - name: Build
+        run: dotnet build services/notification/NotificationService.sln --no-restore --configuration Release
+
+      - name: Verificar formatação
+        run: dotnet format services/notification/NotificationService.sln whitespace --verify-no-changes --no-restore
+
+  test:
+    name: Testes
+    runs-on: ubuntu-latest
+    needs: build
+    if: hashFiles('services/notification/**/*.Tests.csproj') != ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Restaurar dependências
+        run: dotnet restore services/notification/NotificationService.sln
+
+      - name: Executar testes
+        run: dotnet test services/notification/NotificationService.sln --no-restore --configuration Release
