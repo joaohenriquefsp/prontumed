@@ -7,7 +7,7 @@
     "database.user": "clinicos",
     "database.password": "prontumed_secret",
     "database.dbname": "db_identity",
-    "topic.prefix": "clinicos",
+    "topic.prefix": "prontumed",
     "slot.name": "identity_outbox_slot",
     "plugin.name": "pgoutput",
     "table.include.list": "public.eventos_saida",
