@@ -2,10 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PatientService.Application.Interfaces;
-using PatientService.Domain.Repositorios;
+using PatientService.Domain.Repositories;
 using PatientService.Infrastructure.Outbox;
-using PatientService.Infrastructure.Persistencia;
-using PatientService.Infrastructure.Persistencia.Repositorios;
+using PatientService.Infrastructure.Persistence;
+using PatientService.Infrastructure.Persistence.Repositories;
 
 namespace PatientService.Infrastructure;
 

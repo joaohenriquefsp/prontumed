@@ -1,7 +1,7 @@
 using System.Text.Json;
 using PatientService.Application.Interfaces;
 using PatientService.Domain;
-using PatientService.Infrastructure.Persistencia;
+using PatientService.Infrastructure.Persistence;
 
 namespace PatientService.Infrastructure.Outbox;
 

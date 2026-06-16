@@ -1,6 +1,6 @@
 using System.Text.Json;
 using FluentValidation;
-using PatientService.Domain.Excecoes;
+using PatientService.Domain.Exceptions;
 
 namespace PatientService.API.Middlewares;
 

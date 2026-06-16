@@ -2,9 +2,10 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using PatientService.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using PatientService.Infrastructure.Persistencia;
+using PatientService.Infrastructure.Persistence;
 
 #nullable disable
 
@@ -22,7 +23,7 @@ namespace PatientService.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("PatientService.Domain.Entidades.Paciente", b =>
+            modelBuilder.Entity("PatientService.Domain.Entities.Paciente", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()

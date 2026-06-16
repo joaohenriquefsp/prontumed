@@ -1,6 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
-using PatientService.Application.Comportamentos;
+using PatientService.Application.Behaviors;
 
 namespace PatientService.Application;
 
