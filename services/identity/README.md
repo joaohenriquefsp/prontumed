@@ -273,26 +273,26 @@ Definidas em `appsettings.Development.json` (não versionado):
 
 ```
 IdentityService.Domain/        # Entidades, regras de negócio, interfaces
-├── Entidades/                 # Usuario, TokenRenovacao
-├── Eventos/                   # UsuarioCriadoEvent, PerfilAlteradoEvent
-├── Repositorios/              # IUsuarioRepository, ITokenRenovacaoRepository
-└── Excecoes/                  # UsuarioNaoEncontradoException, etc.
+├── Entities/                  # Usuario, TokenRenovacao
+├── Events/                    # UsuarioCriadoEvent, PerfilAlteradoEvent
+├── Repositories/              # IUsuarioRepository, ITokenRenovacaoRepository
+└── Exceptions/                # UsuarioNaoEncontradoException, etc.
 
 IdentityService.Application/   # Casos de uso (CQRS via MediatR)
-├── Comandos/                  # CriarUsuario, Login, Logout, RenovarToken, AlterarSenha, AlterarPerfil, DesativarUsuario
-├── Consultas/                 # ObterUsuarioPorId, ListarUsuarios
-├── Comportamentos/            # ValidationBehavior (FluentValidation no pipeline)
+├── Commands/                  # CriarUsuario, Login, Logout, RenovarToken, AlterarSenha, AlterarPerfil, DesativarUsuario
+├── Queries/                   # ObterUsuarioPorId, ListarUsuarios
+├── Behaviors/                 # ValidationBehavior (FluentValidation no pipeline)
 ├── DTOs/                      # TokenDto, UsuarioDto
 └── Interfaces/                # IJwtService, IHashService, IOutboxPublisher
 
 IdentityService.Infrastructure/ # Implementações técnicas
-├── Persistencia/              # AppDbContext, configurações EF Core, repositórios
-├── Servicos/                  # JwtService (RS256), BcryptHashService
+├── Persistence/               # AppDbContext, configurações EF Core, repositórios
+├── Services/                  # JwtService (RS256), BcryptHashService
 ├── Outbox/                    # OutboxPublisher
 └── Migrations/                # Migrations EF Core
 
 IdentityService.API/           # Entrada HTTP
-├── Controladores/             # AuthController, UsuariosController
+├── Controllers/               # AuthController, UsuariosController
 ├── Middlewares/               # HmacValidationMiddleware, ExceptionHandlingMiddleware
 └── Program.cs
 ```

@@ -30,6 +30,7 @@ Cadastra um novo paciente.
   "sobrenome": "Silva",
   "cpf": "12345678909",
   "dataNascimento": "1990-05-15",
+  "sexo": "Feminino",
   "telefone": "31999990000",
   "email": "maria@email.com",
   "logradouro": "Rua das Flores, 123",
@@ -77,7 +78,7 @@ Lista pacientes com paginação e filtro.
     "id": "...",
     "primeiroNome": "Maria",
     "sobrenome": "Silva",
-    "cpf": "123.456.789-09",
+    "cpf": "12345678909",
     "dataNascimento": "1990-05-15",
     "telefone": "31999990000",
     "ativo": true
@@ -96,8 +97,9 @@ Retorna dados completos de um paciente pelo ID.
   "id": "...",
   "primeiroNome": "Maria",
   "sobrenome": "Silva",
-  "cpf": "123.456.789-09",
+  "cpf": "12345678909",
   "dataNascimento": "1990-05-15",
+  "sexo": "Feminino",
   "telefone": "31999990000",
   "email": "maria@email.com",
   "logradouro": "Rua das Flores, 123",
@@ -200,28 +202,28 @@ Definidas em `appsettings.Development.json` (não versionado):
 
 ```
 PatientService.Domain/
-├── Entidades/       # Paciente (Aggregate Root)
-├── Eventos/         # PacienteCadastradoEvent, PacienteAtualizadoEvent, PacienteDesativadoEvent
-├── Repositorios/    # IPacienteRepository
-├── Servicos/        # ValidadorCpf (dígito verificador)
-└── Excecoes/        # PacienteNaoEncontradoException, CpfJaCadastradoException, CpfInvalidoException
+├── Entities/        # Paciente (Aggregate Root)
+├── Events/          # PacienteCadastradoEvent, PacienteAtualizadoEvent, PacienteDesativadoEvent
+├── Repositories/    # IPacienteRepository
+├── Services/        # ValidadorCpf (dígito verificador)
+└── Exceptions/      # PacienteNaoEncontradoException, CpfJaCadastradoException, CpfInvalidoException
 
 PatientService.Application/
-├── Comandos/        # CadastrarPaciente, AtualizarPaciente, DesativarPaciente
-├── Consultas/       # ObterPacientePorId, ObterPacientePorCpf, ListarPacientes
-├── Comportamentos/  # ValidationBehavior
+├── Commands/        # CadastrarPaciente, AtualizarPaciente, DesativarPaciente
+├── Queries/         # ObterPacientePorId, ObterPacientePorCpf, ListarPacientes
+├── Behaviors/       # ValidationBehavior
 ├── DTOs/            # PacienteDto, PacienteResumoDto
 └── Interfaces/      # IOutboxPublisher
 
 PatientService.Infrastructure/
-├── Persistencia/    # AppDbContext, Configuracoes, Repositorios
+├── Persistence/     # AppDbContext, Configurations, Repositories
 ├── Outbox/          # OutboxPublisher
 └── Migrations/
 
 PatientService.API/
-├── Controladores/   # PacientesController
+├── Controllers/     # PacientesController
 ├── Middlewares/     # HmacValidationMiddleware, ExceptionHandlingMiddleware
-├── Requisicoes/     # CadastrarPacienteRequest, AtualizarPacienteRequest
+├── Requests/        # CadastrarPacienteRequest, AtualizarPacienteRequest
 └── Program.cs
 ```
 
