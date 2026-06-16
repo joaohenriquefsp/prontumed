@@ -1,13 +1,28 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-09
+> Última atualização: 2026-06-15
 
 ---
 
 ## O que é o ProntuMed
 
-Sistema de gestão clínica baseado em microsserviços com comunicação orientada a eventos. Projeto de TCC desenvolvido em .NET 8, NestJS, Next.js e React Native.
+Sistema de gestão clínica baseado em microsserviços com comunicação orientada a eventos. Projeto de TCC desenvolvido em .NET 10, NestJS, Next.js e React Native.
 
 **MVP:** Agendamento de consultas + Prontuário eletrônico + Notificações
+
+---
+
+## Status dos serviços
+
+| Serviço | Tipo | Porta | Status |
+|---|---|---|---|
+| Identity Service | Microsserviço .NET 10 | 5001 | ✅ Concluído |
+| Patient Service | Microsserviço .NET 10 | 5002 | ⏳ próximo passo |
+| Appointment Service | Microsserviço .NET 10 | 5003 | ⏳ |
+| Medical Record Service | Microsserviço .NET 10 | 5004 | ⏳ |
+| Notification Service | Worker .NET 10 | — | ⏳ |
+| BFF Gateway | NestJS | 3000 | ⏳ |
+| Portal Web | Next.js 14 | — | ⏳ |
+| App Mobile | React Native + Expo | — | ⏳ |
 
 ---
 
@@ -16,7 +31,6 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 ### ✅ Documentação de arquitetura (`Arquitetura/`)
 - `arquitetura-software.md` — referência técnica completa da stack e padrões
 - `arquitetura-tcc.md` — proposta arquitetural formatada para o TCC
-- `Joao e Marco.pdf` — guia de estrutura dos capítulos do TCC
 - `contexto-atual.md` — este arquivo
 
 ### ✅ Infraestrutura (`docker-compose.yml` + `infra/`)
@@ -39,17 +53,15 @@ Um único `docker compose up -d` sobe toda a infraestrutura:
 
 ### ✅ Schemas SQL (`infra/postgres/*/01-schema.sql`)
 
-Cada banco tem seu schema criado automaticamente quando o container sobe pela primeira vez via `/docker-entrypoint-initdb.d`.
+Todos os nomes de tabelas e colunas estão em **português** (snake_case).
 
 | Banco | Tabelas |
 |---|---|
-| `db_identity` | `users`, `refresh_tokens`, `outbox_events` |
-| `db_patients` | `patients`, `outbox_events` |
-| `db_appointments` | `doctor_schedules`, `blocked_slots`, `appointments`, `saga_state`, `outbox_events` |
-| `db_medical_records` | `event_store`, `record_access_log`, `outbox_events` |
-| `db_notifications` | `delivery_logs`, `notification_templates` (com seed de 5 templates) |
-
-Todos os arquivos SQL estão documentados em português coluna a coluna.
+| `db_identity` | `usuarios`, `tokens_renovacao`, `eventos_saida` |
+| `db_patients` | `pacientes`, `eventos_saida` |
+| `db_appointments` | `grade_horarios`, `horarios_bloqueados`, `consultas`, `estado_saga`, `eventos_saida` |
+| `db_medical_records` | `repositorio_eventos`, `log_acesso_prontuario`, `eventos_saida` |
+| `db_notifications` | `logs_envio`, `modelos_notificacao` (com seed de 5 modelos) |
 
 ### ✅ Conectores Debezium (`infra/debezium/connectors/`)
 
@@ -59,59 +71,88 @@ Todos os arquivos SQL estão documentados em português coluna a coluna.
 - `appointments-outbox-connector.json` → tópico `prontumed.Appointment`
 - `medical-outbox-connector.json` → tópico `prontumed.MedicalRecord`
 
+Todos os conectores usam campos em português (`tipo_agregado`, `id_agregado`, `tipo_evento`, `payload`, `criado_em`) para mapear a tabela `eventos_saida`.
+
 Registrar conectores (rodar uma vez após o Docker subir):
 ```bash
 bash infra/debezium/register-connectors.sh
 ```
 
-### ✅ Repositório Git
-- Git inicializado na raiz do projeto
-- Commit inicial feito: `feat: infraestrutura base do ProntuMed`
-- `.gitattributes` com `eol=lf` para compatibilidade com Linux/Docker
-- `.env` no `.gitignore` (nunca vai pro repositório)
-
-### ✅ Pipeline de PR (`github/workflows/pr-infra.yml`)
+### ✅ Pipeline de PR (`.github/workflows/pr-infra.yml`)
 
 Roda automaticamente em PRs que tocam `docker-compose.yml` ou `infra/**`:
 - **Job 1:** Valida sintaxe do `docker-compose.yml`
 - **Job 2:** Verifica se todos os bancos têm `01-schema.sql`
-- **Job 3:** Valida JSON dos conectores + confirma `topic.prefix=prontumed`
+- **Job 3:** Valida JSON dos conectores + confirma `topic.prefix`
 
-**Pendente:** Fazer `git remote add origin` e `git push` após criar o repositório em `github.com/joaohenriquefsp/prontumed`.
+### ✅ Identity Service (`services/identity/`)
+
+Primeiro microsserviço implementado. Clean Architecture em 4 projetos .NET 10.
+
+**Endpoints:**
+- `POST /auth/login` — autentica via cookie HttpOnly (sem Bearer)
+- `POST /auth/refresh` — renova tokens via cookie refresh_token
+- `POST /auth/logout` — revoga sessão
+- `POST /auth/alterar-senha` — troca senha do usuário autenticado
+- `GET /usuarios/me` — dados do usuário logado
+- `GET /usuarios` — listar todos [Admin]
+- `GET /usuarios/{id}` — obter por ID [Admin]
+- `POST /usuarios` — criar usuário [Admin]
+- `PATCH /usuarios/{id}/perfil` — alterar perfil [Admin]
+- `PATCH /usuarios/{id}/desativar` — soft delete [Admin]
+- `GET /health` — health check
+
+**Estrutura de pastas (padrão português aplicado a todos os serviços):**
+```
+Servico.Domain/
+├── Entidades/     # Aggregate Roots e entidades filhas
+├── Eventos/       # Domain Events
+├── Repositorios/  # Interfaces de repositório
+└── Excecoes/      # Exceções de domínio
+
+Servico.Application/
+├── Comandos/      # Commands (escrita) via MediatR
+├── Consultas/     # Queries (leitura) via MediatR
+├── Comportamentos/# ValidationBehavior
+├── DTOs/          # Tipos de transferência
+└── Interfaces/    # IJwtService, IHashService, IOutboxPublisher
+
+Servico.Infrastructure/
+├── Persistencia/  # AppDbContext + Configuracoes + Repositorios
+├── Servicos/      # Implementações técnicas (JWT, Hash)
+├── Outbox/        # OutboxPublisher
+└── Migrations/    # Migrations EF Core
+
+Servico.API/
+├── Controladores/ # Controllers ASP.NET Core
+├── Middlewares/   # HMAC + Exception handling
+├── Requisicoes/   # Request DTOs de entrada
+└── Program.cs
+```
+
+Ver `services/identity/README.md` para documentação completa dos endpoints.
 
 ---
 
-## O que ainda não foi feito
+## Padrões definidos (aplicar em todos os próximos serviços)
 
-### Serviços da aplicação (nenhum iniciado)
-
-| Serviço | Tipo | Porta | Status |
-|---|---|---|---|
-| Identity Service | Microsserviço .NET 8 | 5001 | ⏳ próximo passo |
-| Patient Service | Microsserviço .NET 8 | 5002 | ⏳ |
-| Appointment Service | Microsserviço .NET 8 | 5003 | ⏳ |
-| Medical Record Service | Microsserviço .NET 8 | 5004 | ⏳ |
-| Notification Service | Worker .NET 8 | — | ⏳ |
-| BFF Gateway | NestJS | 3000 | ⏳ |
-| Portal Web | Next.js 14 | — | ⏳ |
-| App Mobile | React Native + Expo | — | ⏳ |
-
----
-
-## Decisões tomadas
-
-| Decisão | Escolha | Motivo |
-|---|---|---|
-| Nome do projeto | ProntuMed | Escolha do usuário |
-| Estrutura de repositório | Monorepo único | Simples para TCC, um `git clone` traz tudo |
-| API Gateway | NestJS BFF (sem Kong) | Kong seria caixa preta para a banca; o BFF em código é explicável |
-| HMAC | BFF assina → microsserviços validam | Zero Trust interno sem depender de infraestrutura extra |
-| Nomes das tabelas | Inglês com comentários em português | Padrão do mercado, documentação em português |
-| Prefixo dos tópicos Kafka | `prontumed.*` | Consistente com o nome do projeto |
+| Decisão | Escolha |
+|---|---|
+| Naming de tabelas/colunas | Português, snake_case |
+| Naming de pastas dentro dos projetos | Português (Entidades, Comandos, Consultas...) |
+| Naming dos projetos (.csproj) | `NomeServico.Camada` (misto — convenção .NET) |
+| Autenticação serviço ↔ BFF | HMAC-SHA256 (`X-HMAC-Signature` + `X-HMAC-Timestamp`) |
+| Autenticação usuário | Cookie HttpOnly (access 15min + refresh 7d) |
+| Runtime | .NET 10 |
+| ORM | EF Core 10 + Npgsql |
+| CQRS | MediatR 12 |
+| Validação | FluentValidation 11 |
+| Hash de senha | BCrypt.Net-Next |
+| Uma classe por arquivo | Obrigatório |
 
 ---
 
-## Como retomar amanhã
+## Como retomar
 
 ### 1. Subir a infraestrutura
 ```bash
@@ -123,35 +164,27 @@ docker compose up -d
 bash infra/debezium/register-connectors.sh
 ```
 
-### 3. Verificar que tudo está de pé
-- Kafka UI: http://localhost:8080
-- Debezium API: http://localhost:8083
-
-### 4. Próximo desenvolvimento — Identity Service
-Estrutura que vamos criar:
+### 3. Rodar o Identity Service
+```bash
+cd services/identity/IdentityService.API
+dotnet run
 ```
-services/
-└── identity/
-    ├── IdentityService.Domain/
-    ├── IdentityService.Application/
-    ├── IdentityService.Infrastructure/
-    └── IdentityService.API/
-```
+Acesse: `http://localhost:5001/scalar/v1`
 
-O Identity Service é o pré-requisito de tudo — ele emite os JWTs que os outros serviços e o BFF dependem.
+### 4. Próximo desenvolvimento — Patient Service
+Estrutura: `services/patient/` com os mesmos 4 projetos.
+Depende do Identity Service para validar JWTs no BFF.
 
 ---
 
-## Stack resumida
+## Decisões tomadas
 
-| Camada | Tecnologia |
-|---|---|
-| Microsserviços | .NET 8 + EF Core + MediatR + FluentValidation + Polly |
-| BFF | NestJS + Passport.js |
-| Frontend Web | Next.js 14 (App Router) |
-| App Mobile | React Native + Expo |
-| Banco de dados | PostgreSQL 16 (um por serviço) |
-| Mensageria | Apache Kafka + Debezium + Outbox Pattern |
-| Segurança | OAuth2 + PKCE, JWT (15min), Refresh Token (7d), RBAC, HMAC |
-| Infra | Docker + Docker Compose |
-| CI/CD | GitHub Actions |
+| Decisão | Escolha | Motivo |
+|---|---|---|
+| Monorepo único | 1 `git clone` | Simples para TCC |
+| NestJS como BFF | Sem Kong | Kong é caixa preta — BFF em código é explicável para a banca |
+| HMAC | BFF assina → microsserviços validam | Zero Trust interno sem infra extra |
+| Event Sourcing | Apenas Medical Record | CFM/LGPD exigem imutabilidade do prontuário |
+| Saga Pattern | Apenas Appointment | Transação distribuída de agendamento |
+| Português no banco | Tabelas e colunas | Consistência com o domínio e o TCC em português |
+| Português nas pastas | Sub-pastas dos projetos | Consistência com o naming do banco |

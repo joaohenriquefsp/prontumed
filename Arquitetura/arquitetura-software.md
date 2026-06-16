@@ -123,13 +123,21 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 
 Todos os microsserviços seguem a mesma estrutura de camadas. A regra de dependência aponta sempre para dentro: `API → Application → Domain`. Infrastructure implementa interfaces definidas no Domain.
 
+**Regras de ouro:**
+- Uma classe por arquivo. Interfaces nunca no mesmo arquivo da implementação.
+- **Todo serviço novo deve ter um `README.md` na raiz da sua pasta** (`services/nome-servico/README.md`) documentando: porta, banco, endpoints (método + rota + autenticação + request/response), variáveis de configuração e como rodar localmente. Ver `services/identity/README.md` como referência.
+
 ```
-Service/
-├── Domain/           # Entidades, Value Objects, Domain Events, interfaces de repositório
-├── Application/      # Commands, Queries, Handlers (MediatR), DTOs, Validators
-├── Infrastructure/   # EF Core, Repositórios, Kafka publisher, Outbox
-└── API/              # Controllers, Middlewares, Program.cs
+services/
+└── nome-servico/
+    ├── README.md                  ← obrigatório
+    ├── NomeServico.Domain/
+    ├── NomeServico.Application/
+    ├── NomeServico.Infrastructure/
+    └── NomeServico.API/
 ```
+
+---
 
 ### Padrões aplicados por camada
 
@@ -138,7 +146,128 @@ Service/
 | Domain | Aggregate Root, Value Objects, Domain Events, Repository Interface |
 | Application | CQRS, MediatR, FluentValidation, Use Cases |
 | Infrastructure | EF Core, Outbox Pattern, Kafka Publisher, Debezium CDC |
-| API | Minimal API / Controllers, HMAC Middleware, Health Checks |
+| API | Controllers, HMAC Middleware, Health Checks |
+
+---
+
+### Estrutura de pastas detalhada (template — válido para todos os serviços)
+
+O exemplo abaixo usa o Identity Service. Os demais serviços seguem o mesmo padrão, adaptando os nomes das entidades e casos de uso.
+
+```
+IdentityService.Domain/
+├── Entidades/
+│   ├── Usuario.cs                         # Aggregate Root
+│   └── TokenRenovacao.cs                  # Entidade filha
+├── Eventos/
+│   ├── UsuarioCriadoEvent.cs              # Domain Event
+│   └── PerfilAlteradoEvent.cs
+├── Repositorios/
+│   ├── IUsuarioRepository.cs              # Interface — NUNCA a implementação
+│   └── ITokenRenovacaoRepository.cs
+└── Excecoes/
+    └── UsuarioNaoEncontradoException.cs
+
+IdentityService.Application/
+├── Comandos/                              # Operações que ALTERAM estado
+│   ├── CriarUsuario/
+│   │   ├── CriarUsuarioCommand.cs         # O "pedido" (record com os dados)
+│   │   ├── CriarUsuarioCommandHandler.cs  # A lógica — implementa IRequestHandler
+│   │   └── CriarUsuarioCommandValidator.cs # FluentValidation
+│   ├── Login/
+│   │   ├── LoginCommand.cs
+│   │   ├── LoginCommandHandler.cs
+│   │   └── LoginCommandValidator.cs
+│   └── RenovarToken/
+│       ├── RenovarTokenCommand.cs
+│       └── RenovarTokenCommandHandler.cs
+├── Consultas/                             # Operações que LEEM estado (sem efeito colateral)
+│   ├── ObterUsuarioPorId/
+│   │   ├── ObterUsuarioPorIdQuery.cs      # O "pedido" de leitura
+│   │   └── ObterUsuarioPorIdQueryHandler.cs
+│   └── ListarUsuarios/
+│       ├── ListarUsuariosQuery.cs
+│       └── ListarUsuariosQueryHandler.cs
+├── Comportamentos/
+│   └── ValidationBehavior.cs              # Executa FluentValidation no pipeline MediatR
+├── DTOs/
+│   └── TokenDto.cs                        # Tipos compartilhados entre Comandos/Consultas
+└── Interfaces/
+    ├── IJwtService.cs                     # Interface de serviço externo (domínio não depende de JWT)
+    ├── IHashService.cs
+    └── IOutboxPublisher.cs
+
+IdentityService.Infrastructure/
+├── Persistencia/
+│   ├── AppDbContext.cs
+│   ├── Configuracoes/                     # Mapeamento EF Core (um arquivo por entidade)
+│   │   ├── UsuarioConfiguration.cs
+│   │   ├── TokenRenovacaoConfiguration.cs
+│   │   └── EventoSaidaConfiguration.cs
+│   └── Repositorios/                      # Implementações concretas das interfaces do Domain
+│       ├── UsuarioRepository.cs           # Implementa IUsuarioRepository
+│       └── TokenRenovacaoRepository.cs
+├── Servicos/
+│   ├── JwtService.cs                      # Implementa IJwtService
+│   └── BcryptHashService.cs               # Implementa IHashService
+├── Outbox/
+│   └── OutboxPublisher.cs
+└── Migrations/
+
+IdentityService.API/
+├── Controladores/
+│   ├── AuthController.cs
+│   └── UsuariosController.cs
+├── Middlewares/
+│   ├── HmacValidationMiddleware.cs
+│   └── ExceptionHandlingMiddleware.cs
+├── Requisicoes/
+│   ├── AlterarSenhaRequest.cs
+│   └── AlterarPerfilRequest.cs
+└── Program.cs
+```
+
+---
+
+### CQRS — Command vs Query
+
+**Command** (escrita): altera estado, publica eventos, retorna apenas confirmação ou ID.
+```
+POST /usuarios → CriarUsuarioCommand → Handler → salva no banco + insere em eventos_saida
+```
+
+**Query** (leitura): nunca altera estado. Pode projetar diretamente do banco sem passar pelas entidades de domínio — isso é intencional para leituras otimizadas.
+```
+GET /usuarios/{id} → ObterUsuarioPorIdQuery → Handler → projeta DTO direto via EF
+```
+
+**Queries com múltiplas tabelas (joins):** o QueryHandler acessa o `AppDbContext` diretamente e usa `Select()` para projetar apenas os campos necessários no DTO de resposta. Não instancia entidades de domínio — só lê dados.
+
+```csharp
+// Exemplo de QueryHandler com projeção direta (sem carregar entidade completa)
+var resultado = await _context.Usuarios
+    .Where(u => u.Id == query.Id)
+    .Select(u => new UsuarioDetalheResponse(
+        u.Id, u.Email, u.PrimeiroNome, u.Sobrenome, u.Perfil))
+    .FirstOrDefaultAsync();
+```
+
+Essa separação permite que queries evoluam independentemente das regras de negócio do Domain.
+
+---
+
+### Regras de dependência entre camadas
+
+```
+API          →  Application  →  Domain
+Infrastructure               →  Domain
+Infrastructure  →  Application (registra implementações via DI)
+```
+
+- **Domain** não depende de nada (zero NuGet de infra)
+- **Application** depende apenas do Domain (usa interfaces, nunca implementações)
+- **Infrastructure** implementa as interfaces do Domain e da Application
+- **API** configura o DI container e roteia para os Handlers via MediatR
 
 ---
 
@@ -153,13 +282,13 @@ Service/
 ### Assíncrona — Kafka (Event-Driven)
 - Eventos de domínio entre serviços
 - Outbox Pattern garante entrega mesmo com Kafka indisponível
-- Debezium monitora WAL do PostgreSQL e publica na tabela `outbox_events` → tópico Kafka
+- Debezium monitora WAL do PostgreSQL e publica na tabela `eventos_saida` → tópico Kafka
 - Notification Service é consumidor puro — nunca produz eventos de domínio
 
 ### Outbox + Debezium — fluxo detalhado
 
 ```
-1. Serviço salva entidade + evento em outbox_events (mesma transação SQL)
+1. Serviço salva entidade + evento em eventos_saida (mesma transação SQL)
 2. Debezium lê WAL do PostgreSQL (Change Data Capture)
 3. Debezium publica evento no tópico Kafka correspondente
 4. Consumer (ex: Notification Service) consome e processa
@@ -186,11 +315,11 @@ Service/
 
 | Serviço | Banco | Porta | Observação |
 |---|---|---|---|
-| Identity | `db_identity` | 5432 | users, roles, permissions, refresh_tokens |
-| Patient | `db_patients` | 5433 | patients, contacts, outbox_events |
-| Appointment | `db_appointments` | 5434 | appointments, schedules, saga_state, outbox_events |
-| Medical Record | `db_medical_records` | 5435 | event_store (Event Sourcing), outbox_events |
-| Notification | `db_notifications` | 5436 | delivery_logs, templates |
+| Identity | `db_identity` | 5432 | `usuarios`, `tokens_renovacao`, `eventos_saida` |
+| Patient | `db_patients` | 5433 | `pacientes`, `eventos_saida` |
+| Appointment | `db_appointments` | 5434 | `grade_horarios`, `horarios_bloqueados`, `consultas`, `estado_saga`, `eventos_saida` |
+| Medical Record | `db_medical_records` | 5435 | `repositorio_eventos`, `log_acesso_prontuario`, `eventos_saida` |
+| Notification | `db_notifications` | 5436 | `logs_envio`, `modelos_notificacao` |
 
 > Nenhum serviço acessa o banco de outro serviço diretamente. Comunicação sempre via evento ou API.
 

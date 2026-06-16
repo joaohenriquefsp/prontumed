@@ -4,7 +4,7 @@
 -- RESPONSABILIDADE: Envio de notificações para pacientes e médicos.
 --                   Este serviço é um "worker puro": ele APENAS CONSOME
 --                   eventos do Kafka e dispara notificações (e-mail e push).
---                   Nunca produz eventos, por isso NÃO tem tabela outbox_events.
+--                   Nunca produz eventos, por isso NÃO tem tabela eventos_saida.
 --
 -- COMO FUNCIONA:
 --   1. Appointment Service publica 'AppointmentScheduled' no Kafka
@@ -16,62 +16,58 @@
 
 
 -- -------------------------------------------------------------
--- TABELA: delivery_logs  (Histórico de notificações enviadas)
+-- TABELA: logs_envio  (Histórico de notificações enviadas)
 -- -------------------------------------------------------------
--- delivery_logs = log de entregas de notificações
---
 -- Registra cada tentativa de envio de notificação: se foi bem-sucedida,
 -- se falhou e o motivo da falha. Permite reenvio e diagnóstico de problemas.
 -- -------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS delivery_logs (
+CREATE TABLE IF NOT EXISTS logs_envio (
 
     -- Identificador único deste registro de entrega
-    id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- ID do evento Kafka que originou esta notificação.
     -- Permite rastrear qual agendamento ou ação gerou este envio.
-    event_id     UUID         NOT NULL,
+    id_evento       UUID         NOT NULL,
 
     -- Tipo do evento que gerou a notificação.
     -- Ex: 'AppointmentScheduled' | 'AppointmentCancelled' | 'AppointmentCompleted'
-    event_type   VARCHAR(150) NOT NULL,
+    tipo_evento     VARCHAR(150) NOT NULL,
 
     -- ID do usuário que recebeu (ou deveria ter recebido) a notificação
     -- (ref ao Identity Service, sem FK real)
-    recipient_id UUID         NOT NULL,
+    id_destinatario UUID         NOT NULL,
 
     -- Canal de entrega utilizado:
     --   'Email' → enviado por e-mail
     --   'Push'  → notificação push no aplicativo mobile
-    channel      VARCHAR(20)  NOT NULL,
+    canal           VARCHAR(20)  NOT NULL,
 
     -- Resultado da tentativa de entrega:
     --   'Pending' → ainda não processado
     --   'Sent'    → enviado com sucesso
-    --   'Failed'  → falhou (ver error_message)
-    status       VARCHAR(20)  NOT NULL DEFAULT 'Pending',
+    --   'Failed'  → falhou (ver mensagem_erro)
+    status          VARCHAR(20)  NOT NULL DEFAULT 'Pending',
 
     -- Data e hora em que a notificação foi efetivamente enviada
     -- (nulo se ainda não foi enviada ou se falhou)
-    sent_at      TIMESTAMPTZ,
+    enviado_em      TIMESTAMPTZ,
 
     -- Descrição do erro caso o envio tenha falhado
     -- Ex: 'Invalid email address' | 'Push token expired'
-    error_message TEXT,
+    mensagem_erro   TEXT,
 
-    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    criado_em       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_delivery_logs_event_id     ON delivery_logs (event_id);
-CREATE INDEX IF NOT EXISTS idx_delivery_logs_recipient_id ON delivery_logs (recipient_id);
-CREATE INDEX IF NOT EXISTS idx_delivery_logs_status       ON delivery_logs (status);
+CREATE INDEX IF NOT EXISTS idx_logs_envio_id_evento       ON logs_envio (id_evento);
+CREATE INDEX IF NOT EXISTS idx_logs_envio_id_destinatario ON logs_envio (id_destinatario);
+CREATE INDEX IF NOT EXISTS idx_logs_envio_status          ON logs_envio (status);
 
 
 -- -------------------------------------------------------------
--- TABELA: notification_templates  (Modelos de mensagem)
+-- TABELA: modelos_notificacao  (Modelos de mensagem)
 -- -------------------------------------------------------------
--- notification_templates = modelos de notificação
---
 -- Armazena os textos das notificações para cada tipo de evento e canal.
 -- Usa variáveis no formato {{nome_variavel}} que são substituídas
 -- pelo worker no momento do envio com os dados reais do evento.
@@ -79,32 +75,32 @@ CREATE INDEX IF NOT EXISTS idx_delivery_logs_status       ON delivery_logs (stat
 -- Ex: "Olá {{patient_name}}, sua consulta com Dr(a). {{doctor_name}}
 --      foi agendada para {{scheduled_at}}."
 -- -------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS notification_templates (
+CREATE TABLE IF NOT EXISTS modelos_notificacao (
 
-    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Tipo de evento ao qual este modelo se aplica
     -- Ex: 'AppointmentScheduled' | 'AppointmentCancelled'
-    event_type    VARCHAR(150) NOT NULL,
+    tipo_evento  VARCHAR(150) NOT NULL,
 
     -- Canal ao qual este modelo se aplica: 'Email' | 'Push'
-    -- Push não tem assunto (subject), apenas o corpo da mensagem
-    channel       VARCHAR(20)  NOT NULL,
+    -- Push não tem assunto (assunto), apenas o corpo da mensagem
+    canal        VARCHAR(20)  NOT NULL,
 
-    -- Assunto do e-mail (preenchido apenas quando channel = 'Email')
-    subject       VARCHAR(255),
+    -- Assunto do e-mail (preenchido apenas quando canal = 'Email')
+    assunto      VARCHAR(255),
 
     -- Corpo da mensagem com variáveis substituíveis.
     -- As variáveis {{...}} são preenchidas pelo worker com dados do evento.
-    body_template TEXT         NOT NULL,
+    corpo_modelo TEXT         NOT NULL,
 
     -- Permite desativar um modelo sem deletá-lo
-    is_active     BOOLEAN      NOT NULL DEFAULT true,
+    ativo        BOOLEAN      NOT NULL DEFAULT true,
 
-    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    criado_em    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
 
     -- Cada combinação evento + canal tem apenas um modelo ativo
-    UNIQUE (event_type, channel)
+    UNIQUE (tipo_evento, canal)
 );
 
 
@@ -116,7 +112,7 @@ CREATE TABLE IF NOT EXISTS notification_templates (
 -- ON CONFLICT: se os dados já existirem (ex: reinicialização do
 -- container), ignora sem gerar erro.
 -- =============================================================
-INSERT INTO notification_templates (event_type, channel, subject, body_template) VALUES
+INSERT INTO modelos_notificacao (tipo_evento, canal, assunto, corpo_modelo) VALUES
 
   -- Consulta agendada → notifica paciente por e-mail
   ('AppointmentScheduled', 'Email',
@@ -143,4 +139,4 @@ INSERT INTO notification_templates (event_type, channel, subject, body_template)
    NULL,
    'Consulta concluída! Como foi sua experiência com Dr(a). {{doctor_name}}?')
 
-ON CONFLICT (event_type, channel) DO NOTHING;
+ON CONFLICT (tipo_evento, canal) DO NOTHING;

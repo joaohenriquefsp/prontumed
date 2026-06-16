@@ -15,8 +15,8 @@ O sistema foi projetado para atender clínicas médicas gerais, com capacidade d
 
 ### 2.1 Backend — Microsserviços
 
-**ASP.NET Core (.NET 8)**  
-Framework open-source da Microsoft para desenvolvimento de aplicações web e APIs de alta performance. Cada microsserviço do sistema é uma aplicação ASP.NET Core independente, com seu próprio ciclo de vida, banco de dados e pipeline de deployment. A escolha se justifica pela maturidade do ecossistema, suporte nativo a injeção de dependência, alto desempenho e ampla adoção em sistemas críticos corporativos.
+**ASP.NET Core (.NET 10)**  
+Framework open-source da Microsoft para desenvolvimento de aplicações web e APIs de alta performance. Cada microsserviço do sistema é uma aplicação ASP.NET Core independente, com seu próprio ciclo de vida, banco de dados e pipeline de deployment. A escolha se justifica pela maturidade do ecossistema, suporte nativo a injeção de dependência, alto desempenho e ampla adoção em sistemas críticos corporativos. O .NET 10 é a versão LTS mais recente e traz melhorias de performance significativas em relação às versões anteriores.
 
 **Entity Framework Core**  
 ORM (Object-Relational Mapper) oficial do ecossistema .NET. Responsável pelo mapeamento entre entidades de domínio e tabelas relacionais, gerenciamento de migrations e abstração do acesso ao banco de dados. Permite que a camada de Infrastructure implemente os repositórios definidos no Domain sem expor detalhes de persistência às camadas superiores.
