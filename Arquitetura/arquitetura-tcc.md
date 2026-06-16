@@ -38,7 +38,7 @@ Biblioteca de logging estruturado para .NET. Logs são emitidos em formato JSON,
 ### 2.2 API Gateway / BFF
 
 **NestJS**  
-Framework Node.js progressivo para construção de aplicações server-side eficientes e escaláveis. Utilizado como BFF (Backend For Frontend), é o único ponto de entrada para todos os clientes do sistema. Responsável por validação de tokens, autorização RBAC, roteamento para microsserviços internos, composição de respostas e assinatura HMAC nas chamadas internas.
+Framework Node.js progressivo para construção de aplicações server-side eficientes e escaláveis. Utilizado como BFF (Backend For Frontend), é o único ponto de entrada para todos os clientes do sistema — um único BFF atende tanto o Portal Web quanto o App Mobile, organizando suas rotas por perfil de cliente. Responsável por validação de formato dos dados de entrada, validação de tokens JWT, autorização RBAC, roteamento para microsserviços internos, composição de respostas e assinatura HMAC nas chamadas internas. A validação de regras de negócio (unicidade, invariantes de domínio) é responsabilidade de cada microsserviço — o BFF não é trusted pelos serviços internos.
 
 **Passport.js**  
 Middleware de autenticação para Node.js, integrado ao NestJS para implementação do fluxo OAuth2 com PKCE. Gerencia a validação de tokens JWT emitidos pelo Identity Service.

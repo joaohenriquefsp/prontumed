@@ -20,13 +20,13 @@ jobs:
           dotnet-version: "10.x"
 
       - name: Restaurar dependências
-        run: dotnet restore services/patient/PatientService.sln
+        run: dotnet restore services/patient/PatientService.slnx
 
       - name: Build
-        run: dotnet build services/patient/PatientService.sln --no-restore --configuration Release
+        run: dotnet build services/patient/PatientService.slnx --no-restore --configuration Release
 
       - name: Verificar formatação
-        run: dotnet format services/patient/PatientService.sln whitespace --verify-no-changes --no-restore
+        run: dotnet format services/patient/PatientService.slnx whitespace --verify-no-changes --no-restore
 
   test:
     name: Testes
@@ -43,7 +43,7 @@ jobs:
           dotnet-version: "10.x"
 
       - name: Restaurar dependências
-        run: dotnet restore services/patient/PatientService.sln
+        run: dotnet restore services/patient/PatientService.slnx
 
       - name: Executar testes
-        run: dotnet test services/patient/PatientService.sln --no-restore --configuration Release
+        run: dotnet test services/patient/PatientService.slnx --no-restore --configuration Release

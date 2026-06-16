@@ -16,7 +16,7 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Serviço | Tipo | Porta | Status |
 |---|---|---|---|
 | Identity Service | Microsserviço .NET 10 | 5001 | ✅ Concluído |
-| Patient Service | Microsserviço .NET 10 | 5002 | ⏳ próximo passo |
+| Patient Service | Microsserviço .NET 10 | 5002 | ✅ Concluído |
 | Appointment Service | Microsserviço .NET 10 | 5003 | ⏳ |
 | Medical Record Service | Microsserviço .NET 10 | 5004 | ⏳ |
 | Notification Service | Worker .NET 10 | — | ⏳ |
@@ -133,6 +133,30 @@ Servico.API/
 
 Ver `services/identity/README.md` para documentação completa dos endpoints.
 
+### ✅ Patient Service (`services/patient/`)
+
+Segundo microsserviço implementado. Clean Architecture em 4 projetos .NET 10. Centraliza o cadastro de pacientes — os demais serviços referenciam pacientes pelo `idPaciente`, nunca acessando este banco diretamente.
+
+**Endpoints:**
+- `POST /pacientes` — cadastra paciente [Receptionist, Admin]
+- `GET /pacientes` — lista com paginação + filtro por nome/CPF [Receptionist, Admin, Doctor]
+- `GET /pacientes/{id}` — busca por ID [Receptionist, Admin, Doctor]
+- `GET /pacientes/cpf/{cpf}` — busca por CPF (apenas dígitos) [Receptionist, Admin, Doctor]
+- `PUT /pacientes/{id}` — atualiza dados (CPF não alterável) [Receptionist, Admin]
+- `PATCH /pacientes/{id}/desativar` — soft delete (LGPD) [Admin]
+- `GET /health` — health check
+
+**Aggregate Root:** `Paciente` com campos `primeiroNome`, `sobrenome`, `cpf` (11 dígitos), `dataNascimento`, `sexo`, `telefone`, `email`, `enderecoLogradouro`, `enderecoCidade`, `enderecoUf`, `enderecoCep`, `ativo`.
+
+**Decisões específicas:**
+- CPF: dígito verificador validado no domínio; armazenado como 11 dígitos sem formatação (BFF formata para exibição)
+- `idUsuario` nullable — paciente pode existir sem conta de login
+- Endereço em campos separados (não JSONB) para facilitar busca/filtragem
+
+**Eventos:** `PacienteCadastrado`, `PacienteAtualizado`, `PacienteDesativado` → tópico `prontumed.Patient`
+
+Ver `services/patient/README.md` para documentação completa dos endpoints.
+
 ---
 
 ## Padrões definidos (aplicar em todos os próximos serviços)
@@ -172,9 +196,24 @@ dotnet run
 ```
 Acesse: `http://localhost:5001/scalar/v1`
 
-### 4. Próximo desenvolvimento — Patient Service
-Estrutura: `services/patient/` com os mesmos 4 projetos.
-Depende do Identity Service para validar JWTs no BFF.
+### 4. Rodar o Patient Service
+```bash
+cd services/patient/PatientService.API
+dotnet run
+```
+Acesse: `http://localhost:5002/scalar/v1`
+
+---
+
+## Padrões adicionados (aplicar em todos os próximos serviços)
+
+| Decisão | Escolha |
+|---|---|
+| Validação de formato | BFF (NestJS + class-validator) |
+| Validação de negócio | Microsserviço (domínio — nunca confia no caller) |
+| BFF | Um único para todos os clientes (não um por microsserviço) |
+| CPF | Dígito verificador validado no domínio + unicidade no banco |
+| Endereço | Campos separados (`logradouro`, `cidade`, `uf`, `cep`) — não JSONB |
 
 ---
 
@@ -183,9 +222,11 @@ Depende do Identity Service para validar JWTs no BFF.
 | Decisão | Escolha | Motivo |
 |---|---|---|
 | Monorepo único | 1 `git clone` | Simples para TCC |
-| NestJS como BFF | Sem Kong | Kong é caixa preta — BFF em código é explicável para a banca |
+| NestJS como BFF | Um único, sem Kong | Kong é caixa preta — BFF em código é explicável para a banca |
+| BFF por cliente | Não por microsserviço | Portal Web + App Mobile compartilham o mesmo BFF |
 | HMAC | BFF assina → microsserviços validam | Zero Trust interno sem infra extra |
+| Validação dupla | BFF (formato) + microsserviço (negócio) | Cada camada defende seu próprio perímetro |
 | Event Sourcing | Apenas Medical Record | CFM/LGPD exigem imutabilidade do prontuário |
 | Saga Pattern | Apenas Appointment | Transação distribuída de agendamento |
 | Português no banco | Tabelas e colunas | Consistência com o domínio e o TCC em português |
-| Português nas pastas | Sub-pastas dos projetos | Consistência com o naming do banco |
+| Inglês nas pastas | Sub-pastas dos projetos (.NET) | Convenção padrão do ecossistema .NET — pastas em inglês, arquivos/classes/banco em português |

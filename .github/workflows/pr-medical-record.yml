@@ -1,4 +1,4 @@
-name: PR — Medical Record Service
+﻿name: PR â€” Medical Record Service
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build e Formatação
+    name: Build e FormataÃ§Ã£o
     runs-on: ubuntu-latest
 
     steps:
@@ -19,14 +19,14 @@ jobs:
         with:
           dotnet-version: "10.x"
 
-      - name: Restaurar dependências
-        run: dotnet restore services/medical-record/MedicalRecordService.sln
+      - name: Restaurar dependÃªncias
+        run: dotnet restore services/medical-record/MedicalRecordService.slnx
 
       - name: Build
-        run: dotnet build services/medical-record/MedicalRecordService.sln --no-restore --configuration Release
+        run: dotnet build services/medical-record/MedicalRecordService.slnx --no-restore --configuration Release
 
-      - name: Verificar formatação
-        run: dotnet format services/medical-record/MedicalRecordService.sln whitespace --verify-no-changes --no-restore
+      - name: Verificar formataÃ§Ã£o
+        run: dotnet format services/medical-record/MedicalRecordService.slnx whitespace --verify-no-changes --no-restore
 
   test:
     name: Testes
@@ -42,8 +42,9 @@ jobs:
         with:
           dotnet-version: "10.x"
 
-      - name: Restaurar dependências
-        run: dotnet restore services/medical-record/MedicalRecordService.sln
+      - name: Restaurar dependÃªncias
+        run: dotnet restore services/medical-record/MedicalRecordService.slnx
 
       - name: Executar testes
-        run: dotnet test services/medical-record/MedicalRecordService.sln --no-restore --configuration Release
+        run: dotnet test services/medical-record/MedicalRecordService.slnx --no-restore --configuration Release
+

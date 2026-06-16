@@ -40,17 +40,45 @@ Sistema de gestão clínica baseado em microsserviços, projetado para clínicas
 
 ## Camada de Entrada — BFF NestJS
 
-Único ponto de entrada para todos os frontends. Responsável por:
+**Um único BFF para todos os clientes** — não um BFF por microsserviço. O BFF é organizado por *cliente* (Portal Web e App Mobile), não por domínio de backend.
 
+```
+Portal Web  ─┐
+             ├──▶  BFF NestJS (porta 3000)  ──▶  Identity Service
+App Mobile  ─┘                              ──▶  Patient Service
+                                            ──▶  Appointment Service
+                                            ──▶  Medical Record Service
+                                            ──▶  Notification Service
+```
+
+Responsabilidades do BFF:
 - Validação de tokens JWT (OAuth2)
 - Autorização RBAC por rota
 - Roteamento para microsserviços internos
 - Composição de respostas (agregação de dados de múltiplos serviços)
 - Assinatura HMAC em todas as chamadas para serviços internos
+- Validação de formato dos dados de entrada (antes de enviar ao microsserviço)
 - Rate limiting por cliente
 
 **Porta:** `3000`  
 **Tecnologia:** NestJS + Passport.js + HMAC request signing
+
+---
+
+## Estratégia de Validação
+
+A validação ocorre em **duas camadas** por motivos distintos — é redundante de propósito:
+
+| Camada | O que valida | Por quê |
+|---|---|---|
+| **BFF** | Formato, campos obrigatórios, tamanho, regex | Feedback rápido ao usuário; evita chamada desnecessária ao serviço |
+| **Microsserviço** | Regras de negócio (unicidade, dígito verificador, invariantes de domínio) | O serviço não confia em nenhum caller — nem no BFF |
+
+**Exemplo — cadastro de paciente:**
+- BFF valida: CPF tem 11 dígitos, nome não está vazio, data de nascimento é uma data válida
+- Patient Service valida: CPF não está cadastrado, dígito verificador do CPF é válido
+
+> O microsserviço pode ser chamado diretamente (bypass do BFF), por outro serviço interno, ou por um cliente futuro. A regra de negócio deve sempre ser protegida na camada de domínio.
 
 ---
 
@@ -73,12 +101,27 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 ### 2. Patient Service
 **Porta:** `5002`  
 **Banco:** `db_patients`  
-**Responsabilidade:** Cadastro de pacientes, dados pessoais, contatos. CQRS separando leitura de escrita.
+**Responsabilidade:** Cadastro e gestão de pacientes. Outros serviços referenciam pacientes pelo `idPaciente` — nunca acessam este banco diretamente.
+
+**Endpoints:**
+- `POST /pacientes` — cadastrar [Receptionist, Admin]
+- `GET /pacientes` — listar com paginação e filtro [Receptionist, Admin, Doctor]
+- `GET /pacientes/{id}` — obter por ID [Receptionist, Admin, Doctor]
+- `GET /pacientes/cpf/{cpf}` — buscar por CPF [Receptionist, Admin, Doctor]
+- `PUT /pacientes/{id}` — atualizar dados [Receptionist, Admin]
+- `PATCH /pacientes/{id}/desativar` — soft delete (LGPD) [Admin]
+- `GET /health`
+
+**Aggregate Root — `Paciente`:**
+- Campos: `primeiroNome`, `sobrenome`, `cpf`, `dataNascimento`, `telefone`, `email`, `logradouro`, `cidade`, `uf`, `cep`, `ativo`
+- CPF: dígito verificador validado no domínio + unicidade garantida pelo banco
+- Endereço: campos separados (não JSONB) para facilitar busca e filtragem
+- Soft delete: campo `ativo` — registros inativados são mantidos (exigência LGPD)
 
 **Eventos publicados:**
-- `PatientCreated`
-- `PatientUpdated`
-- `PatientDeactivated`
+- `PacienteCadastrado`
+- `PacienteAtualizado`
+- `PacienteDesativado`
 
 ---
 
