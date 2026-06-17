@@ -128,7 +128,7 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 ### 3. Appointment Service
 **Porta:** `5003`  
 **Banco:** `db_appointments`  
-**Responsabilidade:** Agendamento, cancelamento, controle de agenda médica. Saga Pattern para consistência distribuída.
+**Responsabilidade:** Agendamento, cancelamento, controle de agenda médica. Saga Pattern como máquina de estados interna — verificação de disponibilidade, reserva de slot e criação da consulta são atômicas dentro do mesmo serviço. A notificação é assíncrona via Outbox + Kafka.
 
 **Eventos publicados:**
 - `AppointmentScheduled`
@@ -440,6 +440,11 @@ gateway                 :3000  ← entry point único
 ### ADR-005 — Single-tenant no MVP
 **Decisão:** Single-tenant com estrutura preparada para multi-tenant  
 **Motivo:** Multi-tenant via tenant_id aumenta risco de vazamento de dados e complexidade de queries. A migração para multi-tenant via schema isolation é possível sem reescrita dos serviços.
+
+### ADR-006 — Saga Pattern como máquina de estados interna (não cross-service)
+**Decisão:** O Saga do Appointment Service é uma máquina de estados persistida dentro do próprio serviço, não uma coordenação distribuída entre múltiplos microsserviços.  
+**Motivo:** Verificação de disponibilidade, reserva de slot e criação da consulta pertencem ao mesmo Bounded Context e são operações atômicas dentro de uma única transação SQL — não há justificativa para distribuir essa transação entre serviços distintos. A comunicação com o Notification Service (único serviço externo envolvido) é assíncrona e coberta pelo Outbox + Debezium, que já garante entrega confiável. Um Saga orquestrado cross-service adicionaria coordenação remota, endpoints de compensação e controle de idempotência sem benefício para o domínio clínico do MVP.  
+**Consequência:** A tabela `estado_saga` rastreia transições (`AgendadoPendente → Confirmado → Concluído / Cancelado`) com compensação local (liberar slot) em caso de falha. O comportamento é correto e rastreável sem two-phase commit.
 
 ---
 
