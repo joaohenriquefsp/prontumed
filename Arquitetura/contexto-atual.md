@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-15
+> Última atualização: 2026-06-17
 
 ---
 
@@ -78,12 +78,22 @@ Registrar conectores (rodar uma vez após o Docker subir):
 bash infra/debezium/register-connectors.sh
 ```
 
-### ✅ Pipeline de PR (`.github/workflows/pr-infra.yml`)
+### ✅ Pipelines de PR (`.github/workflows/`)
 
-Roda automaticamente em PRs que tocam `docker-compose.yml` ou `infra/**`:
-- **Job 1:** Valida sintaxe do `docker-compose.yml`
-- **Job 2:** Verifica se todos os bancos têm `01-schema.sql`
-- **Job 3:** Valida JSON dos conectores + confirma `topic.prefix`
+Cada serviço tem um workflow dedicado que roda em PRs com mudanças no seu path:
+
+| Workflow | Path gatilho | Jobs |
+|---|---|---|
+| `pr-infra.yml` | `docker-compose.yml`, `infra/**` | Valida compose, schemas SQL e conectores Debezium |
+| `pr-identity.yml` | `services/identity/**` | restore → build → format check |
+| `pr-patient.yml` | `services/patient/**` | restore → build → format check |
+| `pr-appointment.yml` | `services/appointment/**` | restore → build → format check |
+| `pr-medical-record.yml` | `services/medical-record/**` | restore → build → format check |
+| `pr-notification.yml` | `services/notification/**` | restore → build → format check |
+
+Todos os workflows também aceitam `workflow_dispatch` para disparo manual.
+
+**Correções aplicadas (2026-06-17):** `hashFiles()` foi removido do job de testes (incompatível com GitHub Actions) e substituído por `if: false` — isso corrigiu o bug em que o trigger `pull_request` nunca disparava em nenhum PR do projeto. `pr-medical-record.yml` e `pr-notification.yml` também foram reescritos para corrigir encoding corrompido (BOM + double-UTF8).
 
 ### ✅ Identity Service (`services/identity/`)
 
