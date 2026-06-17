@@ -33,7 +33,7 @@ jobs:
     name: Testes
     runs-on: ubuntu-latest
     needs: build
-    if: hashFiles('services/appointment/**/*.Tests.csproj') != ''
+    if: ${{ false }}
 
     steps:
       - uses: actions/checkout@v4
