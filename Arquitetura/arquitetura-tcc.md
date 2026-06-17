@@ -130,8 +130,19 @@ Separação entre operações de escrita (Commands) e leitura (Queries). Command
 ### 3.4 Event Sourcing
 Aplicado exclusivamente no Medical Record Service. Ao invés de armazenar o estado atual do prontuário, o sistema armazena a sequência de eventos que levaram a esse estado. O estado atual é derivado pela projeção dos eventos. Isso garante histórico imutável e auditabilidade total, requisitos da legislação brasileira (CFM e LGPD) para registros médicos.
 
-### 3.5 Saga Pattern
-Utilizado no Appointment Service para coordenar transações distribuídas que envolvem múltiplos serviços. O agendamento de uma consulta requer verificação de disponibilidade, reserva de slot e notificação — operações em serviços distintos. A Saga coordena esse fluxo com etapas de compensação automática em caso de falha, mantendo consistência eventual sem necessidade de transações distribuídas (2PC).
+### 3.5 Saga Pattern (Máquina de Estados Interna)
+Aplicado no Appointment Service para gerenciar o ciclo de vida de uma consulta com rastreabilidade de estado e compensação local em caso de falha.
+
+**Decisão de design deliberada:** verificação de disponibilidade, reserva de slot e criação da consulta são operações dentro do mesmo Bounded Context (Appointment Service) e ocorrem em uma única transação SQL atômica. Não há coordenação cross-service nessa etapa — o Outbox Pattern já garante a entrega confiável do evento para o Notification Service via Kafka.
+
+O Saga Pattern se manifesta como uma **máquina de estados persistida** na tabela `estado_saga`, que rastreia cada transição do agendamento:
+
+```
+AgendadoPendente → Confirmado → Concluído
+                             ↘ Cancelado (com compensação: libera o slot)
+```
+
+Essa abordagem é preferida a um Saga orquestrado cross-service por dois motivos: (1) toda a lógica de negócio de agendamento pertence ao mesmo Bounded Context, portanto não há justificativa para distribuir a transação entre serviços; (2) a complexidade operacional de coordenar múltiplos serviços com two-phase commit ou compensação remota não traz benefício para o domínio clínico do MVP. A consistência eventual entre Appointment Service e Notification Service é garantida pelo Outbox + Debezium, que é tratamento adequado para comunicação assíncrona entre contextos distintos.
 
 ### 3.6 BFF (Backend For Frontend)
 Camada intermediária dedicada entre frontends e microsserviços. Diferentemente de um API Gateway genérico, o BFF é otimizado para as necessidades específicas de cada cliente, compondo respostas que agregam dados de múltiplos serviços em uma única requisição. Reduz over-fetching e under-fetching nos frontends.

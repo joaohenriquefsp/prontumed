@@ -17,7 +17,7 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 |---|---|---|---|
 | Identity Service | Microsserviço .NET 10 | 5001 | ✅ Concluído |
 | Patient Service | Microsserviço .NET 10 | 5002 | ✅ Concluído |
-| Appointment Service | Microsserviço .NET 10 | 5003 | ⏳ |
+| Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído |
 | Medical Record Service | Microsserviço .NET 10 | 5004 | ⏳ |
 | Notification Service | Worker .NET 10 | — | ⏳ |
 | BFF Gateway | NestJS | 3000 | ⏳ |
@@ -133,6 +133,36 @@ Servico.API/
 
 Ver `services/identity/README.md` para documentação completa dos endpoints.
 
+### ✅ Appointment Service (`services/appointment/`)
+
+Terceiro microsserviço implementado. Clean Architecture em 4 projetos .NET 10.
+
+**Endpoints:**
+- `POST /consultas` — agendar [Receptionist, Admin]
+- `GET /consultas` — listar com filtros (idMedico, idPaciente, status, data) [Receptionist, Admin, Doctor]
+- `GET /consultas/{id}` — obter por ID [Receptionist, Admin, Doctor]
+- `PATCH /consultas/{id}/confirmar` — confirmar [Receptionist, Admin]
+- `PATCH /consultas/{id}/cancelar` — cancelar [Receptionist, Admin]
+- `PATCH /consultas/{id}/concluir` — concluir [Doctor]
+- `PATCH /consultas/{id}/no-show` — registrar ausência [Doctor, Admin]
+- `POST /grade-horarios` — criar slot semanal [Admin]
+- `GET /grade-horarios?idMedico=` — listar agenda do médico [Receptionist, Admin, Doctor]
+- `DELETE /grade-horarios/{id}` — remover slot [Admin]
+- `GET /disponibilidade?idMedico=&data=` — slots disponíveis [Receptionist, Admin]
+- `POST /horarios-bloqueados` — bloquear período [Admin]
+- `DELETE /horarios-bloqueados/{id}` — desbloquear [Admin]
+- `GET /health` — health check
+
+**Máquina de estados:** `Scheduled → Confirmed → Completed / Cancelled / NoShow`  
+Rastreada em `estado_saga` com correlação pelo `id` da consulta.
+
+**Eventos:** `ConsultaAgendada`, `ConsultaConfirmada`, `ConsultaCancelada`, `ConsultaConcluida`, `ConsultaNoShow` → tópico `prontumed.Appointment`
+
+**Decisões específicas:**
+- Disponibilidade calculada em memória (grade_horarios menos consultas existentes menos bloqueios) — sem lógica cross-service
+- Saga é máquina de estados interna — transação atômica no mesmo banco (ver ADR-006)
+- GradeHorario e HorarioBloqueado são entidades simples (sem eventos) — admin config
+
 ### ✅ Patient Service (`services/patient/`)
 
 Segundo microsserviço implementado. Clean Architecture em 4 projetos .NET 10. Centraliza o cadastro de pacientes — os demais serviços referenciam pacientes pelo `idPaciente`, nunca acessando este banco diretamente.
@@ -227,6 +257,6 @@ Acesse: `http://localhost:5002/scalar/v1`
 | HMAC | BFF assina → microsserviços validam | Zero Trust interno sem infra extra |
 | Validação dupla | BFF (formato) + microsserviço (negócio) | Cada camada defende seu próprio perímetro |
 | Event Sourcing | Apenas Medical Record | CFM/LGPD exigem imutabilidade do prontuário |
-| Saga Pattern | Apenas Appointment | Transação distribuída de agendamento |
+| Saga Pattern | Apenas Appointment | Máquina de estados interna — disponibilidade + slot + consulta são atômicos no mesmo serviço; notificação é assíncrona via Outbox + Kafka |
 | Português no banco | Tabelas e colunas | Consistência com o domínio e o TCC em português |
 | Inglês nas pastas | Sub-pastas dos projetos (.NET) | Convenção padrão do ecossistema .NET — pastas em inglês, arquivos/classes/banco em português |
