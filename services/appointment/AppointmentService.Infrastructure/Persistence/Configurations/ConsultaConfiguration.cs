@@ -20,7 +20,10 @@ public class ConsultaConfiguration : IEntityTypeConfiguration<Consulta>
         builder.Property(c => c.Observacoes).HasColumnName("observacoes");
         builder.Property(c => c.CriadoEm).HasColumnName("criado_em").IsRequired();
         builder.Property(c => c.AtualizadoEm).HasColumnName("atualizado_em").IsRequired();
-        builder.HasIndex(c => new { c.IdMedico, c.AgendadoPara });
+        builder.HasIndex(c => new { c.IdMedico, c.AgendadoPara })
+            .IsUnique()
+            .HasFilter("status NOT IN ('Cancelled', 'Completed', 'NoShow')")
+            .HasDatabaseName("idx_consultas_slot_unico");
         builder.HasIndex(c => c.IdPaciente);
         builder.Ignore(c => c.Eventos);
     }

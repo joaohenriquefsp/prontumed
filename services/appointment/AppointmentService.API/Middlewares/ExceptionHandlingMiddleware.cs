@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using AppointmentService.Domain.Exceptions;
 
 namespace AppointmentService.API.Middlewares;
@@ -42,6 +43,11 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
         catch (TransicaoStatusInvalidaException ex)
         {
             await EscreverRespostaAsync(context, StatusCodes.Status422UnprocessableEntity, ex.Message);
+        }
+        catch (DbUpdateException)
+        {
+            // Violação de constraint única (ex: slot duplo por requisição concorrente)
+            await EscreverRespostaAsync(context, StatusCodes.Status409Conflict, "Conflito ao salvar os dados. O horário pode já estar ocupado.");
         }
         catch (Exception ex)
         {
