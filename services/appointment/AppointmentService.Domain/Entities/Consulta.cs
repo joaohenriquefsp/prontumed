@@ -58,7 +58,7 @@ public class Consulta : AggregateRoot
 
     public void Concluir(string? observacoes)
     {
-        if (Status != StatusConsulta.Confirmado)
+        if (Status != StatusConsulta.Agendado && Status != StatusConsulta.Confirmado)
             throw new TransicaoStatusInvalidaException(Status, StatusConsulta.Concluido);
         Status = StatusConsulta.Concluido;
         if (observacoes is not null) Observacoes = observacoes;
@@ -68,7 +68,7 @@ public class Consulta : AggregateRoot
 
     public void RegistrarNoShow()
     {
-        if (Status != StatusConsulta.Confirmado)
+        if (Status != StatusConsulta.Agendado && Status != StatusConsulta.Confirmado)
             throw new TransicaoStatusInvalidaException(Status, StatusConsulta.NoShow);
         Status = StatusConsulta.NoShow;
         AtualizadoEm = DateTime.UtcNow;
