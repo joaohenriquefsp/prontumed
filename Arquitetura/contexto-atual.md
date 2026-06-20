@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-17
+> Última atualização: 2026-06-20
 
 ---
 
@@ -15,10 +15,10 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 
 | Serviço | Tipo | Porta | Status |
 |---|---|---|---|
-| Identity Service | Microsserviço .NET 10 | 5001 | ✅ Concluído |
-| Patient Service | Microsserviço .NET 10 | 5002 | ✅ Concluído |
-| Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído |
-| Medical Record Service | Microsserviço .NET 10 | 5004 | ⏳ |
+| Identity Service | Microsserviço .NET 10 | 5001 | ✅ Concluído + revisado |
+| Patient Service | Microsserviço .NET 10 | 5002 | ✅ Concluído + revisado |
+| Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído + code review aplicado |
+| Medical Record Service | Microsserviço .NET 10 | 5004 | ⏳ Próximo |
 | Notification Service | Worker .NET 10 | — | ⏳ |
 | BFF Gateway | NestJS | 3000 | ⏳ |
 | Portal Web | Next.js 14 | — | ⏳ |
@@ -71,7 +71,7 @@ Todos os nomes de tabelas e colunas estão em **português** (snake_case).
 - `appointments-outbox-connector.json` → tópico `prontumed.Appointment`
 - `medical-outbox-connector.json` → tópico `prontumed.MedicalRecord`
 
-Todos os conectores usam campos em português (`tipo_agregado`, `id_agregado`, `tipo_evento`, `payload`, `criado_em`) para mapear a tabela `eventos_saida`.
+Todos os conectores usam campos em português (`tipo_agregado`, `id_agregado`, `tipo_evento`, `payload`, `criado_em`).
 
 Registrar conectores (rodar uma vez após o Docker subir):
 ```bash
@@ -80,7 +80,7 @@ bash infra/debezium/register-connectors.sh
 
 ### ✅ Pipelines de PR (`.github/workflows/`)
 
-Cada serviço tem um workflow dedicado que roda em PRs com mudanças no seu path:
+Cada serviço tem um workflow dedicado que roda em PRs e aceita `workflow_dispatch`:
 
 | Workflow | Path gatilho | Jobs |
 |---|---|---|
@@ -91,111 +91,65 @@ Cada serviço tem um workflow dedicado que roda em PRs com mudanças no seu path
 | `pr-medical-record.yml` | `services/medical-record/**` | restore → build → format check |
 | `pr-notification.yml` | `services/notification/**` | restore → build → format check |
 
-Todos os workflows também aceitam `workflow_dispatch` para disparo manual.
-
-**Correções aplicadas (2026-06-17):** `hashFiles()` foi removido do job de testes (incompatível com GitHub Actions) e substituído por `if: false` — isso corrigiu o bug em que o trigger `pull_request` nunca disparava em nenhum PR do projeto. `pr-medical-record.yml` e `pr-notification.yml` também foram reescritos para corrigir encoding corrompido (BOM + double-UTF8).
-
 ### ✅ Identity Service (`services/identity/`)
 
-Primeiro microsserviço implementado. Clean Architecture em 4 projetos .NET 10.
+Microsserviço de autenticação e gestão de usuários. Clean Architecture em 4 projetos .NET 10.
 
 **Endpoints:**
-- `POST /auth/login` — autentica via cookie HttpOnly (sem Bearer)
-- `POST /auth/refresh` — renova tokens via cookie refresh_token
+- `POST /auth/login` — autentica via cookie HttpOnly
+- `POST /auth/refresh` — renova tokens
 - `POST /auth/logout` — revoga sessão
-- `POST /auth/alterar-senha` — troca senha do usuário autenticado
-- `GET /usuarios/me` — dados do usuário logado
-- `GET /usuarios` — listar todos [Admin]
-- `GET /usuarios/{id}` — obter por ID [Admin]
-- `POST /usuarios` — criar usuário [Admin]
-- `PATCH /usuarios/{id}/perfil` — alterar perfil [Admin]
-- `PATCH /usuarios/{id}/desativar` — soft delete [Admin]
-- `GET /health` — health check
+- `POST /auth/alterar-senha`
+- `GET /usuarios/me`, `GET /usuarios`, `GET /usuarios/{id}`
+- `POST /usuarios`, `PATCH /usuarios/{id}/perfil`, `PATCH /usuarios/{id}/desativar`
+- `GET /health`
 
-**Estrutura de pastas (padrão inglês para pastas, português para arquivos/classes/banco):**
-```
-Servico.Domain/
-├── Entities/      # Aggregate Roots e entidades filhas  (ex: Paciente.cs, Usuario.cs)
-├── Events/        # Domain Events                       (ex: PacienteCadastradoEvent.cs)
-├── Repositories/  # Interfaces de repositório           (ex: IPacienteRepository.cs)
-├── Services/      # Serviços de domínio                 (ex: ValidadorCpf.cs)
-└── Exceptions/    # Exceções de domínio                 (ex: PacienteNaoEncontradoException.cs)
+Ver `services/identity/README.md` para documentação completa.
 
-Servico.Application/
-├── Commands/      # Commands (escrita) via MediatR      (ex: CadastrarPacienteCommand.cs)
-├── Queries/       # Queries (leitura) via MediatR       (ex: ObterPacientePorIdQuery.cs)
-├── Behaviors/     # ValidationBehavior no pipeline
-├── DTOs/          # Tipos de transferência              (ex: PacienteDto.cs)
-└── Interfaces/    # IOutboxPublisher, IJwtService, etc.
+### ✅ Patient Service (`services/patient/`)
 
-Servico.Infrastructure/
-├── Persistence/   # AppDbContext + Configurations + Repositories
-├── Services/      # Implementações técnicas (ex: JwtService.cs, BcryptHashService.cs)
-├── Outbox/        # EventoSaida.cs + OutboxPublisher.cs
-└── Migrations/    # Migrations EF Core
+Cadastro e gestão de pacientes. Clean Architecture em 4 projetos .NET 10.
 
-Servico.API/
-├── Controllers/   # Controllers ASP.NET Core            (ex: PacientesController.cs)
-├── Middlewares/   # HMAC + Exception handling
-├── Requests/      # Request DTOs de entrada             (ex: CadastrarPacienteRequest.cs)
-└── Program.cs
-```
+**Endpoints:**
+- `POST /pacientes`, `GET /pacientes`, `GET /pacientes/{id}`, `GET /pacientes/cpf/{cpf}`
+- `PUT /pacientes/{id}`, `PATCH /pacientes/{id}/desativar`, `GET /health`
 
-Ver `services/identity/README.md` para documentação completa dos endpoints.
+Ver `services/patient/README.md` para documentação completa.
 
-### ✅ Appointment Service (`services/appointment/`)
+### ✅ Appointment Service (`services/appointment/`) — com code review aplicado
 
-Terceiro microsserviço implementado. Clean Architecture em 4 projetos .NET 10.
+Agendamento de consultas, grade de horários e controle de disponibilidade. Clean Architecture em 4 projetos .NET 10.
 
 **Endpoints:**
 - `POST /consultas` — agendar [Receptionist, Admin]
-- `GET /consultas` — listar com filtros (idMedico, idPaciente, status, data) [Receptionist, Admin, Doctor]
-- `GET /consultas/{id}` — obter por ID [Receptionist, Admin, Doctor]
+- `GET /consultas` — listar com filtros (idMedico forçado pelo JWT para Doctor — LGPD)
+- `GET /consultas/{id}` — obter por ID
 - `PATCH /consultas/{id}/confirmar` — confirmar [Receptionist, Admin]
 - `PATCH /consultas/{id}/cancelar` — cancelar [Receptionist, Admin]
 - `PATCH /consultas/{id}/concluir` — concluir [Doctor]
 - `PATCH /consultas/{id}/no-show` — registrar ausência [Doctor, Admin]
-- `POST /grade-horarios` — criar slot semanal [Admin]
-- `GET /grade-horarios?idMedico=` — listar agenda do médico [Receptionist, Admin, Doctor]
-- `DELETE /grade-horarios/{id}` — remover slot [Admin]
-- `GET /disponibilidade?idMedico=&data=` — slots disponíveis [Receptionist, Admin]
-- `POST /horarios-bloqueados` — bloquear período [Admin]
-- `DELETE /horarios-bloqueados/{id}` — desbloquear [Admin]
-- `GET /health` — health check
+- `POST /grade-horarios`, `GET /grade-horarios`, `DELETE /grade-horarios/{id}`
+- `GET /disponibilidade?idMedico=&data=`
+- `POST /horarios-bloqueados`, `DELETE /horarios-bloqueados/{id}`
+- `GET /health`
 
-**Máquina de estados:** `Scheduled → Confirmed → Completed / Cancelled / NoShow`  
-Rastreada em `estado_saga` com correlação pelo `id` da consulta.
+**Máquina de estados:** `Agendado → Confirmado → Concluido / Cancelado / NoShow`
+- `Agendado → Concluido` e `Agendado → NoShow` também são válidos (consultas não confirmadas explicitamente)
+- Rastreada em `estado_saga` com constantes tipadas (`EtapaSaga`, `StatusSaga`)
 
-**Eventos:** `ConsultaAgendada`, `ConsultaConfirmada`, `ConsultaCancelada`, `ConsultaConcluida`, `ConsultaNoShow` → tópico `prontumed.Appointment`
+**Eventos publicados:** `ConsultaAgendada`, `ConsultaConfirmada`, `ConsultaCancelada`, `ConsultaConcluida`, `ConsultaNoShow` → tópico `prontumed.Appointment`
 
-**Decisões específicas:**
-- Disponibilidade calculada em memória (grade_horarios menos consultas existentes menos bloqueios) — sem lógica cross-service
-- Saga é máquina de estados interna — transação atômica no mesmo banco (ver ADR-006)
-- GradeHorario e HorarioBloqueado são entidades simples (sem eventos) — admin config
+**Bugfixes aplicados (2026-06-20) — 7 PRs mergeados:**
 
-### ✅ Patient Service (`services/patient/`)
-
-Segundo microsserviço implementado. Clean Architecture em 4 projetos .NET 10. Centraliza o cadastro de pacientes — os demais serviços referenciam pacientes pelo `idPaciente`, nunca acessando este banco diretamente.
-
-**Endpoints:**
-- `POST /pacientes` — cadastra paciente [Receptionist, Admin]
-- `GET /pacientes` — lista com paginação + filtro por nome/CPF [Receptionist, Admin, Doctor]
-- `GET /pacientes/{id}` — busca por ID [Receptionist, Admin, Doctor]
-- `GET /pacientes/cpf/{cpf}` — busca por CPF (apenas dígitos) [Receptionist, Admin, Doctor]
-- `PUT /pacientes/{id}` — atualiza dados (CPF não alterável) [Receptionist, Admin]
-- `PATCH /pacientes/{id}/desativar` — soft delete (LGPD) [Admin]
-- `GET /health` — health check
-
-**Aggregate Root:** `Paciente` com campos `primeiroNome`, `sobrenome`, `cpf` (11 dígitos), `dataNascimento`, `sexo`, `telefone`, `email`, `enderecoLogradouro`, `enderecoCidade`, `enderecoUf`, `enderecoCep`, `ativo`.
-
-**Decisões específicas:**
-- CPF: dígito verificador validado no domínio; armazenado como 11 dígitos sem formatação (BFF formata para exibição)
-- `idUsuario` nullable — paciente pode existir sem conta de login
-- Endereço em campos separados (não JSONB) para facilitar busca/filtragem
-
-**Eventos:** `PacienteCadastrado`, `PacienteAtualizado`, `PacienteDesativado` → tópico `prontumed.Patient`
-
-Ver `services/patient/README.md` para documentação completa dos endpoints.
+| PR | Correção |
+|---|---|
+| #7 | Credenciais removidas do `appsettings.json` + `appsettings.Development.json` no `.gitignore` |
+| #8 | HMAC: QueryString incluída na assinatura + proteção contra replay com `IMemoryCache` (nonce) |
+| #9 | LGPD: Doctor só pode listar suas próprias consultas (idMedico extraído do JWT claim) |
+| #10 | Race condition: unique constraint parcial `idx_consultas_slot_unico` + `DbUpdateException` → 409 |
+| #11 | Transições: `Agendado → Concluido` e `Agendado → NoShow` aceitos como válidos |
+| #12 | Saga: `EtapaSaga` com constantes tipadas + validação em `AtualizarEtapa` |
+| #13 | Status padronizados para português nos valores do banco (`"Agendado"`, `"Confirmado"`, etc.) |
 
 ---
 
@@ -203,10 +157,11 @@ Ver `services/patient/README.md` para documentação completa dos endpoints.
 
 | Decisão | Escolha |
 |---|---|
-| Naming de tabelas/colunas | Português, snake_case |
+| Naming de tabelas/colunas/valores de status | Português, snake_case |
 | Naming de pastas dentro dos projetos | Inglês (Entities, Commands, Queries, Controllers...) |
-| Naming dos projetos (.csproj) | `NomeServico.Camada` (misto — convenção .NET) |
-| Autenticação serviço ↔ BFF | HMAC-SHA256 (`X-HMAC-Signature` + `X-HMAC-Timestamp`) |
+| Naming dos projetos (.csproj) | `NomeServico.Camada` |
+| Autenticação serviço ↔ BFF | HMAC-SHA256 (`X-HMAC-Signature` + `X-HMAC-Timestamp` + `X-HMAC-Nonce` via IMemoryCache) |
+| HMAC — mensagem assinada | `{Method}{Path}{QueryString}{Timestamp}` |
 | Autenticação usuário | Cookie HttpOnly (access 15min + refresh 7d) |
 | Runtime | .NET 10 |
 | ORM | EF Core 10 + Npgsql |
@@ -214,13 +169,17 @@ Ver `services/patient/README.md` para documentação completa dos endpoints.
 | Validação | FluentValidation 11 |
 | Hash de senha | BCrypt.Net-Next |
 | Uma classe por arquivo | Obrigatório |
+| LGPD — listagem por Doctor | `idMedico` sempre extraído do JWT claim `NameIdentifier` |
+| Credenciais | Nunca em `appsettings.json`; sempre em `appsettings.Development.json` (gitignored) |
 
 ---
 
 ## Como retomar
 
-### 1. Subir a infraestrutura
+### 1. Clonar e subir a infra
 ```bash
+git clone https://github.com/joaohenriquefsp/prontumed.git
+cd prontumed
 docker compose up -d
 ```
 
@@ -229,31 +188,96 @@ docker compose up -d
 bash infra/debezium/register-connectors.sh
 ```
 
-### 3. Rodar o Identity Service
-```bash
-cd services/identity/IdentityService.API
-dotnet run
-```
-Acesse: `http://localhost:5001/scalar/v1`
+### 3. Criar `appsettings.Development.json` para cada serviço
 
-### 4. Rodar o Patient Service
-```bash
-cd services/patient/PatientService.API
-dotnet run
+Cada serviço precisa de um arquivo local com credenciais (não está no git):
+
+**Identity** (`services/identity/IdentityService.API/appsettings.Development.json`):
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=db_identity;Username=clinicos;Password=prontumed_secret"
+  },
+  "Jwt": { "Chave": "chave-desenvolvimento-minimo-32-caracteres" },
+  "Hmac": { "Chave": "chave-hmac-compartilhada-com-o-bff" }
+}
 ```
-Acesse: `http://localhost:5002/scalar/v1`
+
+**Patient** (`services/patient/PatientService.API/appsettings.Development.json`):
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5433;Database=db_patients;Username=clinicos;Password=prontumed_secret"
+  },
+  "Hmac": { "Chave": "chave-hmac-compartilhada-com-o-bff" }
+}
+```
+
+**Appointment** (`services/appointment/AppointmentService.API/appsettings.Development.json`):
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5434;Database=db_appointments;Username=clinicos;Password=prontumed_secret"
+  },
+  "Jwt": {
+    "Chave": "chave-desenvolvimento-minimo-32-caracteres",
+    "Emissor": "prontumed-identity",
+    "Audiencia": "prontumed-services"
+  },
+  "Hmac": { "Chave": "chave-hmac-compartilhada-com-o-bff" }
+}
+```
+
+### 4. Rodar os serviços
+```bash
+# Identity (porta 5001)
+cd services/identity/IdentityService.API && dotnet run
+
+# Patient (porta 5002)
+cd services/patient/PatientService.API && dotnet run
+
+# Appointment (porta 5003)
+cd services/appointment/AppointmentService.API && dotnet run
+```
+
+Acesse a documentação de cada serviço em `http://localhost:{porta}/scalar/v1`
 
 ---
 
-## Padrões adicionados (aplicar em todos os próximos serviços)
+## Próximo serviço: Medical Record Service
 
-| Decisão | Escolha |
-|---|---|
-| Validação de formato | BFF (NestJS + class-validator) |
-| Validação de negócio | Microsserviço (domínio — nunca confia no caller) |
-| BFF | Um único para todos os clientes (não um por microsserviço) |
-| CPF | Dígito verificador validado no domínio + unicidade no banco |
-| Endereço | Campos separados (`logradouro`, `cidade`, `uf`, `cep`) — não JSONB |
+**Porta:** `5004` | **Banco:** `db_medical_records` | **Branch:** `feat/medical-record-service`
+
+### O que implementar
+
+O Medical Record Service é o mais complexo do sistema — usa **Event Sourcing** internamente (exigência LGPD/CFM de imutabilidade do prontuário).
+
+**Entidades principais:**
+- `Prontuario` (Aggregate Root com Event Sourcing) — histórico imutável de entradas clínicas
+- `EntradaProntuario` — nota clínica, diagnóstico, prescrição, exame
+- `LogAcessoProntuario` — auditoria de quem acessou (LGPD)
+
+**Endpoints planejados:**
+- `POST /prontuarios/{idPaciente}` — criar prontuário [Doctor]
+- `GET /prontuarios/{idPaciente}` — obter prontuário completo [Doctor]
+- `POST /prontuarios/{idPaciente}/entradas` — adicionar entrada [Doctor]
+- `GET /prontuarios/{idPaciente}/entradas/{idEntrada}` — obter entrada [Doctor]
+- `GET /prontuarios/{idPaciente}/historico` — histórico de eventos [Doctor, Admin]
+- `GET /health`
+
+**Tabelas no banco (`db_medical_records`):**
+- `repositorio_eventos` — stream de eventos (Event Store)
+- `log_acesso_prontuario` — auditoria de acesso (LGPD)
+- `eventos_saida` — outbox para Kafka
+
+**Eventos publicados:**
+- `ProntuarioCriado`, `EntradaAdicionada`, `ProntuarioAcessado` → tópico `prontumed.MedicalRecord`
+
+**Padrões específicos deste serviço:**
+- Event Sourcing: `repositorio_eventos` acumula todos os eventos do prontuário; o estado atual é reconstruído por replay
+- Projeção em memória: `Prontuario.ReplayEventos()` reconstrói o agregado a partir do event store
+- Nenhum UPDATE/DELETE na tabela de eventos — apenas INSERTs
+- Log de acesso registrado automaticamente em cada GET (LGPD)
 
 ---
 
@@ -264,9 +288,11 @@ Acesse: `http://localhost:5002/scalar/v1`
 | Monorepo único | 1 `git clone` | Simples para TCC |
 | NestJS como BFF | Um único, sem Kong | Kong é caixa preta — BFF em código é explicável para a banca |
 | BFF por cliente | Não por microsserviço | Portal Web + App Mobile compartilham o mesmo BFF |
-| HMAC | BFF assina → microsserviços validam | Zero Trust interno sem infra extra |
+| HMAC | BFF assina → microsserviços validam (Method+Path+QueryString+Timestamp+Nonce) | Zero Trust interno sem infra extra |
 | Validação dupla | BFF (formato) + microsserviço (negócio) | Cada camada defende seu próprio perímetro |
 | Event Sourcing | Apenas Medical Record | CFM/LGPD exigem imutabilidade do prontuário |
-| Saga Pattern | Apenas Appointment | Máquina de estados interna — disponibilidade + slot + consulta são atômicos no mesmo serviço; notificação é assíncrona via Outbox + Kafka |
-| Português no banco | Tabelas e colunas | Consistência com o domínio e o TCC em português |
-| Inglês nas pastas | Sub-pastas dos projetos (.NET) | Convenção padrão do ecossistema .NET — pastas em inglês, arquivos/classes/banco em português |
+| Saga Pattern | Apenas Appointment (interna, não cross-service) | Disponibilidade + slot + consulta são atômicos no mesmo banco |
+| Português no banco | Tabelas, colunas e valores de status | Consistência com o domínio e o TCC em português |
+| Inglês nas pastas | Sub-pastas dos projetos (.NET) | Convenção padrão do ecossistema .NET |
+| Double-booking | Unique constraint parcial no banco + DbUpdateException no middleware | Atomicidade real — check em memória não é suficiente sob concorrência |
+| LGPD — Doctor | idMedico forçado pelo JWT, não pelo caller | Doctor não pode consultar dados de outros médicos |

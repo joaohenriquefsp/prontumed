@@ -74,7 +74,7 @@ Ferramenta de administração de banco de dados universal, utilizada durante o d
 ### 2.5 Mensageria e Eventos
 
 **Apache Kafka**  
-Plataforma distribuída de streaming de eventos, projetada para alta throughput, baixa latência e durabilidade de mensagens. Utilizado como Event Broker central da arquitetura. Eventos de domínio (ex: `AppointmentScheduled`, `PatientCreated`) são publicados em tópicos Kafka e consumidos pelos serviços interessados de forma assíncrona e desacoplada.
+Plataforma distribuída de streaming de eventos, projetada para alta throughput, baixa latência e durabilidade de mensagens. Utilizado como Event Broker central da arquitetura. Eventos de domínio (ex: `ConsultaAgendada`, `PacienteCadastrado`) são publicados em tópicos Kafka e consumidos pelos serviços interessados de forma assíncrona e desacoplada.
 
 **Debezium**  
 Plataforma open-source de Change Data Capture (CDC) baseada em Kafka Connect. Monitora o Write-Ahead Log (WAL) do PostgreSQL e captura automaticamente todas as alterações nas tabelas monitoradas (INSERT, UPDATE, DELETE), publicando-as como eventos no Kafka. Utilizado em conjunto com o Outbox Pattern para garantir entrega confiável de eventos sem two-phase commit.
@@ -99,7 +99,7 @@ Padrão aberto (RFC 7519) para transmissão segura de informações entre partes
 Modelo de controle de acesso baseado em papéis. Quatro roles são definidos: `Patient`, `Doctor`, `Receptionist` e `Admin`. Guards no BFF validam o role do usuário antes de rotear cada requisição, garantindo que cada perfil acesse apenas os recursos autorizados.
 
 **HMAC (Hash-based Message Authentication Code)**  
-Mecanismo de autenticação de mensagens baseado em função hash criptográfica. Utilizado para autenticação de serviço a serviço: o BFF assina cada requisição enviada aos microsserviços internos com uma chave secreta compartilhada. Os microsserviços rejeitam qualquer chamada sem assinatura HMAC válida, implementando o princípio de Zero Trust na comunicação interna.
+Mecanismo de autenticação de mensagens baseado em função hash criptográfica. Utilizado para autenticação de serviço a serviço: o BFF assina cada requisição enviada aos microsserviços internos com uma chave secreta compartilhada. A mensagem assinada inclui `{Method}{Path}{QueryString}{Timestamp}`, impedindo alterações de parâmetros sem invalidar a assinatura. Um nonce armazenado em `IMemoryCache` protege contra replay attacks dentro da janela de tempo válida. Os microsserviços rejeitam qualquer chamada sem assinatura HMAC válida, implementando o princípio de Zero Trust na comunicação interna.
 
 **LGPD (Lei Geral de Proteção de Dados)**  
 A LGPD (Lei nº 13.709/2018) estabelece regras sobre coleta, armazenamento e tratamento de dados pessoais no Brasil. A arquitetura incorpora requisitos da LGPD como: criptografia de dados sensíveis at rest, soft delete com anonimização, log de acesso ao prontuário eletrônico e rastreabilidade de alterações via Event Sourcing no Medical Record Service.
@@ -138,8 +138,11 @@ Aplicado no Appointment Service para gerenciar o ciclo de vida de uma consulta c
 O Saga Pattern se manifesta como uma **máquina de estados persistida** na tabela `estado_saga`, que rastreia cada transição do agendamento:
 
 ```
-AgendadoPendente → Confirmado → Concluído
-                             ↘ Cancelado (com compensação: libera o slot)
+Agendado → Confirmado → Concluido
+         ↘             ↘ Cancelado (com compensação: libera o slot)
+         ↘               NoShow
+         → Concluido  (transição direta também válida)
+         → NoShow     (transição direta também válida)
 ```
 
 Essa abordagem é preferida a um Saga orquestrado cross-service por dois motivos: (1) toda a lógica de negócio de agendamento pertence ao mesmo Bounded Context, portanto não há justificativa para distribuir a transação entre serviços; (2) a complexidade operacional de coordenar múltiplos serviços com two-phase commit ou compensação remota não traz benefício para o domínio clínico do MVP. A consistência eventual entre Appointment Service e Notification Service é garantida pelo Outbox + Debezium, que é tratamento adequado para comunicação assíncrona entre contextos distintos.
@@ -171,10 +174,10 @@ O fluxo abaixo demonstra a integração entre os padrões aplicados em um cenár
 ```
 Recepcionista (Portal Web)
   → BFF NestJS [valida JWT + RBAC + HMAC]
-    → Appointment Service [Command: ScheduleAppointment]
-      → Salva appointment + outbox_events (transação atômica)
+    → Appointment Service [Command: AgendarConsulta]
+      → Salva consulta + eventos_saida (transação atômica)
         → Debezium captura WAL
-          → Publica AppointmentScheduled no Kafka
+          → Publica ConsultaAgendada no Kafka (tópico prontumed.Appointment)
             → Notification Service consome evento
               → Envia email ao paciente
               → Envia push ao paciente (app) e ao médico (app)

@@ -130,11 +130,12 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 **Banco:** `db_appointments`  
 **Responsabilidade:** Agendamento, cancelamento, controle de agenda médica. Saga Pattern como máquina de estados interna — verificação de disponibilidade, reserva de slot e criação da consulta são atômicas dentro do mesmo serviço. A notificação é assíncrona via Outbox + Kafka.
 
-**Eventos publicados:**
-- `AppointmentScheduled`
-- `AppointmentCancelled`
-- `AppointmentCompleted`
-- `SlotBlocked`
+**Eventos publicados:** `ConsultaAgendada`, `ConsultaConfirmada`, `ConsultaCancelada`, `ConsultaConcluida`, `ConsultaNoShow` → tópico `prontumed.Appointment`
+
+**Máquina de estados:** `Agendado → Confirmado → Concluido / Cancelado / NoShow`
+- `Agendado → Concluido` e `Agendado → NoShow` também são transições válidas (consultas não confirmadas explicitamente)
+- Rastreada em `estado_saga` com constantes tipadas (`EtapaSaga`, `StatusSaga`)
+- Status armazenados em português: `"Agendado"`, `"Confirmado"`, `"Cancelado"`, `"Concluido"`, `"NoShow"`
 
 ---
 
@@ -156,9 +157,9 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 **Responsabilidade:** Worker puro. Consome eventos Kafka e dispara notificações via Email e Push.
 
 **Eventos consumidos:**
-- `AppointmentScheduled` → email + push de confirmação para paciente e médico
-- `AppointmentCancelled` → email + push de cancelamento
-- `AppointmentCompleted` → push solicitando feedback ao paciente
+- `ConsultaAgendada` → email + push de confirmação para paciente e médico
+- `ConsultaCancelada` → email + push de cancelamento
+- `ConsultaConcluida` → push solicitando feedback ao paciente
 
 ---
 
@@ -350,7 +351,7 @@ Infrastructure  →  Application (registra implementações via DI)
 | OAuth2 + PKCE | BFF + Identity Service | Autenticação de usuários. PKCE obrigatório para app mobile |
 | JWT (short-lived) | BFF | Tokens de curta duração (15min) + refresh token (7 dias) |
 | RBAC | BFF (guards) | 4 roles: `Patient`, `Doctor`, `Receptionist`, `Admin` |
-| HMAC | BFF → Serviços internos | Assina cada request interno. Serviços rejeitam sem assinatura |
+| HMAC-SHA256 | BFF → Serviços internos | Assina `{Method}{Path}{QueryString}{Timestamp}`. Nonce com `IMemoryCache` previne replay attacks. Serviços rejeitam sem assinatura válida |
 | LGPD | Medical Record + Patient | Dados sensíveis criptografados at rest, soft delete com anonimização, log de acesso |
 
 ---
@@ -408,7 +409,7 @@ gateway                 :3000  ← entry point único
 
 3. Debezium captura
    → Lê WAL de db_appointments
-   → Publica AppointmentScheduled no Kafka
+   → Publica ConsultaAgendada no Kafka
 
 4. Notification Service consome
    → Dispara email + push para paciente
@@ -444,7 +445,7 @@ gateway                 :3000  ← entry point único
 ### ADR-006 — Saga Pattern como máquina de estados interna (não cross-service)
 **Decisão:** O Saga do Appointment Service é uma máquina de estados persistida dentro do próprio serviço, não uma coordenação distribuída entre múltiplos microsserviços.  
 **Motivo:** Verificação de disponibilidade, reserva de slot e criação da consulta pertencem ao mesmo Bounded Context e são operações atômicas dentro de uma única transação SQL — não há justificativa para distribuir essa transação entre serviços distintos. A comunicação com o Notification Service (único serviço externo envolvido) é assíncrona e coberta pelo Outbox + Debezium, que já garante entrega confiável. Um Saga orquestrado cross-service adicionaria coordenação remota, endpoints de compensação e controle de idempotência sem benefício para o domínio clínico do MVP.  
-**Consequência:** A tabela `estado_saga` rastreia transições (`AgendadoPendente → Confirmado → Concluído / Cancelado`) com compensação local (liberar slot) em caso de falha. O comportamento é correto e rastreável sem two-phase commit.
+**Consequência:** A tabela `estado_saga` rastreia transições (`Agendado → Confirmado → Concluido / Cancelado / NoShow`) com compensação local (liberar slot) em caso de falha. Transições `Agendado → Concluido` e `Agendado → NoShow` também são válidas. O comportamento é correto e rastreável sem two-phase commit.
 
 ---
 
