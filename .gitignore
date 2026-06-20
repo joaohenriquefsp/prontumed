@@ -1,5 +1,6 @@
 # Credenciais — nunca commitar
 .env
+**/appsettings.Development.json
 
 # .NET
 **/bin/
