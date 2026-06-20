@@ -1,3 +1,5 @@
+using AppointmentService.Domain.Exceptions;
+
 namespace AppointmentService.Domain.Entities;
 
 public class EstadoSaga
@@ -30,6 +32,10 @@ public class EstadoSaga
 
     public void AtualizarEtapa(string etapa, string status, string payload)
     {
+        if (!EtapaSaga.EhValido(etapa))
+            throw new ArgumentException($"Etapa de saga inválida: '{etapa}'.", nameof(etapa));
+        if (!StatusSaga.EhValido(status))
+            throw new ArgumentException($"Status de saga inválido: '{status}'.", nameof(status));
         EtapaAtual = etapa;
         Status = status;
         Payload = payload;

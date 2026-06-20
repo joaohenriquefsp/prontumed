@@ -24,7 +24,7 @@ public class CancelarConsultaHandler(
         if (saga is not null)
         {
             var payload = JsonSerializer.Serialize(new { idConsulta = consulta.Id, motivo = cmd.Motivo, statusConsulta = StatusConsulta.Cancelado });
-            saga.AtualizarEtapa("ConsultaCancelada", StatusSaga.Concluido, payload);
+            saga.AtualizarEtapa(EtapaSaga.ConsultaCancelada, StatusSaga.Concluido, payload);
             await sagaRepository.AtualizarAsync(saga, ct);
         }
 
