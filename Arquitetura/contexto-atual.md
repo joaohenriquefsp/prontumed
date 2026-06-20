@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-20
+> Última atualização: 2026-06-20 (Medical Record Service implementado)
 
 ---
 
@@ -18,7 +18,7 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Identity Service | Microsserviço .NET 10 | 5001 | ✅ Concluído + revisado |
 | Patient Service | Microsserviço .NET 10 | 5002 | ✅ Concluído + revisado |
 | Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído + code review aplicado |
-| Medical Record Service | Microsserviço .NET 10 | 5004 | ⏳ Próximo |
+| Medical Record Service | Microsserviço .NET 10 | 5004 | ✅ Implementado (aguardando smoke test e PR) |
 | Notification Service | Worker .NET 10 | — | ⏳ |
 | BFF Gateway | NestJS | 3000 | ⏳ |
 | Portal Web | Next.js 14 | — | ⏳ |
@@ -151,6 +151,30 @@ Agendamento de consultas, grade de horários e controle de disponibilidade. Clea
 | #12 | Saga: `EtapaSaga` com constantes tipadas + validação em `AtualizarEtapa` |
 | #13 | Status padronizados para português nos valores do banco (`"Agendado"`, `"Confirmado"`, etc.) |
 
+### ✅ Medical Record Service (`services/medical-record/`)
+
+Prontuário eletrônico do paciente. Clean Architecture em 4 projetos .NET 10, mas com persistência via **Event Sourcing** em vez de CRUD — único serviço do sistema com essa abordagem (ADR-002).
+
+**Endpoints:**
+- `POST /prontuarios/{idPaciente}` — criar prontuário [Doctor]
+- `GET /prontuarios/{idPaciente}` — obter prontuário completo, reconstruído por replay [Doctor]
+- `POST /prontuarios/{idPaciente}/entradas` — adicionar entrada (nota, diagnóstico, prescrição, exame) [Doctor]
+- `GET /prontuarios/{idPaciente}/entradas/{idEntrada}` — obter entrada [Doctor]
+- `GET /prontuarios/{idPaciente}/historico` — histórico bruto de eventos [Doctor, Admin]
+- `GET /health`
+
+**Event Sourcing:** não há tabela de estado atual. Toda leitura reconstrói o agregado `Prontuario` lendo `repositorio_eventos` em ordem de `versao` e aplicando os eventos via `Prontuario.ReplayEventos`. Os mesmos `IDomainEvent` servem tanto de evento de domínio (outbox → Kafka) quanto de evento de event-sourcing (persistência append-only) — não há duplicação de classes de evento. Concorrência na escrita é protegida pela constraint `UNIQUE(id_agregado, versao)` → `DbUpdateException` → `409`.
+
+**Auditoria de acesso (LGPD/CFM):** toda leitura bem-sucedida grava uma linha em `log_acesso_prontuario` (ação `Viewed`), feito diretamente no Query Handler via `ILogAcessoRepository` — exceção documentada à regra de que queries não alteram estado.
+
+**Decisão de implementação:** a migration EF `Initial` é intencionalmente vazia (sem `CreateTable`) — o schema já é criado por `infra/postgres/medical/01-schema.sql` via `docker-entrypoint-initdb.d`, e a migration existe só para o Design-Time Model do EF reconhecer o schema existente.
+
+**Eventos publicados:** `RecordCreatedEvent`, `ConsultationNoteAddedEvent`, `DiagnosisAddedEvent`, `PrescriptionAddedEvent`, `ExamRequestedEvent` → tópico `prontumed.MedicalRecord`
+
+Ver `services/medical-record/README.md` para documentação completa.
+
+**Pendente:** smoke test manual fim-a-fim com Docker (ambiente local não tinha Docker Desktop ativo durante a implementação) e abertura do PR.
+
 ---
 
 ## Padrões definidos (aplicar em todos os próximos serviços)
@@ -238,46 +262,20 @@ cd services/patient/PatientService.API && dotnet run
 
 # Appointment (porta 5003)
 cd services/appointment/AppointmentService.API && dotnet run
+
+# Medical Record (porta 5004)
+cd services/medical-record/MedicalRecordService.API && dotnet run
 ```
 
 Acesse a documentação de cada serviço em `http://localhost:{porta}/scalar/v1`
 
 ---
 
-## Próximo serviço: Medical Record Service
+## Próximo serviço: Notification Service
 
-**Porta:** `5004` | **Banco:** `db_medical_records` | **Branch:** `feat/medical-record-service`
+**Tipo:** Worker .NET 10 (sem API REST) | **Banco:** `db_notifications` | **Branch:** `feat/notification-service`
 
-### O que implementar
-
-O Medical Record Service é o mais complexo do sistema — usa **Event Sourcing** internamente (exigência LGPD/CFM de imutabilidade do prontuário).
-
-**Entidades principais:**
-- `Prontuario` (Aggregate Root com Event Sourcing) — histórico imutável de entradas clínicas
-- `EntradaProntuario` — nota clínica, diagnóstico, prescrição, exame
-- `LogAcessoProntuario` — auditoria de quem acessou (LGPD)
-
-**Endpoints planejados:**
-- `POST /prontuarios/{idPaciente}` — criar prontuário [Doctor]
-- `GET /prontuarios/{idPaciente}` — obter prontuário completo [Doctor]
-- `POST /prontuarios/{idPaciente}/entradas` — adicionar entrada [Doctor]
-- `GET /prontuarios/{idPaciente}/entradas/{idEntrada}` — obter entrada [Doctor]
-- `GET /prontuarios/{idPaciente}/historico` — histórico de eventos [Doctor, Admin]
-- `GET /health`
-
-**Tabelas no banco (`db_medical_records`):**
-- `repositorio_eventos` — stream de eventos (Event Store)
-- `log_acesso_prontuario` — auditoria de acesso (LGPD)
-- `eventos_saida` — outbox para Kafka
-
-**Eventos publicados:**
-- `ProntuarioCriado`, `EntradaAdicionada`, `ProntuarioAcessado` → tópico `prontumed.MedicalRecord`
-
-**Padrões específicos deste serviço:**
-- Event Sourcing: `repositorio_eventos` acumula todos os eventos do prontuário; o estado atual é reconstruído por replay
-- Projeção em memória: `Prontuario.ReplayEventos()` reconstrói o agregado a partir do event store
-- Nenhum UPDATE/DELETE na tabela de eventos — apenas INSERTs
-- Log de acesso registrado automaticamente em cada GET (LGPD)
+Consome eventos Kafka (`ConsultaAgendada`, `ConsultaCancelada`, `ConsultaConcluida`) e dispara notificações via Email e Push. Ver seção "5. Notification Service" em `Arquitetura/arquitetura-software.md` para o desenho já definido.
 
 ---
 

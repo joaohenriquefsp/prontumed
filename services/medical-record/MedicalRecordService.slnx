@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="MedicalRecordService.API/MedicalRecordService.API.csproj" />
+  <Project Path="MedicalRecordService.Application/MedicalRecordService.Application.csproj" />
+  <Project Path="MedicalRecordService.Domain/MedicalRecordService.Domain.csproj" />
+  <Project Path="MedicalRecordService.Infrastructure/MedicalRecordService.Infrastructure.csproj" />
+</Solution>
