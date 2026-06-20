@@ -80,7 +80,7 @@ CREATE INDEX IF NOT EXISTS idx_horarios_bloqueados_intervalo ON horarios_bloquea
 -- TABELA: consultas  (Consultas agendadas)
 -- -------------------------------------------------------------
 -- Registro de cada consulta marcada no sistema.
--- Uma consulta nasce no status 'Scheduled' e evolui conforme
+-- Uma consulta nasce no status 'Agendado' e evolui conforme
 -- o andamento: confirmada, cancelada, realizada ou não compareceu.
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS consultas (
@@ -100,14 +100,14 @@ CREATE TABLE IF NOT EXISTS consultas (
     duracao_minutos     SMALLINT    NOT NULL DEFAULT 30,
 
     -- Estado atual da consulta no ciclo de vida:
-    --   'Scheduled'  → agendada, aguardando confirmação
-    --   'Confirmed'  → confirmada pelo médico ou recepção
-    --   'Cancelled'  → cancelada (ver motivo abaixo)
-    --   'Completed'  → consulta realizada
+    --   'Agendado'   → agendada, aguardando confirmação
+    --   'Confirmado' → confirmada pelo médico ou recepção
+    --   'Cancelado'  → cancelada (ver motivo abaixo)
+    --   'Concluido'  → consulta realizada
     --   'NoShow'     → paciente não compareceu
-    status              VARCHAR(30) NOT NULL DEFAULT 'Scheduled',
+    status              VARCHAR(30) NOT NULL DEFAULT 'Agendado',
 
-    -- Motivo do cancelamento (preenchido apenas quando status = 'Cancelled')
+    -- Motivo do cancelamento (preenchido apenas quando status = 'Cancelado')
     motivo_cancelamento VARCHAR(500),
 
     -- Observações gerais sobre o agendamento (uso interno da recepção)
@@ -121,6 +121,13 @@ CREATE INDEX IF NOT EXISTS idx_consultas_id_paciente   ON consultas (id_paciente
 CREATE INDEX IF NOT EXISTS idx_consultas_id_medico     ON consultas (id_medico);
 CREATE INDEX IF NOT EXISTS idx_consultas_agendado_para ON consultas (agendado_para);
 CREATE INDEX IF NOT EXISTS idx_consultas_status        ON consultas (status);
+
+-- Constraint única parcial anti-double-booking (ADR/PR #10): impede que o mesmo
+-- médico tenha duas consultas no mesmo horário, exceto quando uma delas já foi
+-- cancelada, concluída ou marcada como NoShow (libera o slot para reagendamento).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_consultas_slot_unico
+    ON consultas (id_medico, agendado_para)
+    WHERE status NOT IN ('Cancelado', 'Concluido', 'NoShow');
 
 
 -- =============================================================
