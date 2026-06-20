@@ -142,12 +142,16 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 ### 4. Medical Record Service
 **Porta:** `5004`  
 **Banco:** `db_medical_records`  
-**Responsabilidade:** Prontuário eletrônico. Somente médico escreve e visualiza. Histórico imutável via Event Sourcing.
+**Responsabilidade:** Prontuário eletrônico. Somente médico escreve e visualiza. Histórico imutável via Event Sourcing — o estado não é armazenado diretamente, é reconstruído por replay de `repositorio_eventos` (`Prontuario.ReplayEventos`). Os mesmos eventos de domínio servem tanto de evento de event-sourcing (persistido, versionado) quanto de evento de outbox (publicado uma única vez no Kafka).
 
-**Eventos publicados:**
-- `RecordCreated`
-- `ConsultationNoteAdded`
-- `RecordAccessed` *(auditoria LGPD)*
+**Eventos publicados** (tópico `prontumed.MedicalRecord`):
+- `RecordCreatedEvent`
+- `ConsultationNoteAddedEvent`
+- `DiagnosisAddedEvent`
+- `PrescriptionAddedEvent`
+- `ExamRequestedEvent`
+
+**Auditoria de acesso (LGPD/CFM):** toda leitura grava uma linha em `log_acesso_prontuario` diretamente no Query Handler (não é um evento de domínio nem passa pelo outbox — é um efeito local e síncrono, exceção documentada à regra de que queries não alteram estado).
 
 ---
 
