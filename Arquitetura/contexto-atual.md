@@ -18,8 +18,8 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Identity Service | Microsserviço .NET 10 | 5001 | ✅ Concluído + revisado |
 | Patient Service | Microsserviço .NET 10 | 5002 | ✅ Concluído + revisado |
 | Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído + code review aplicado |
-| Medical Record Service | Microsserviço .NET 10 | 5004 | ✅ Implementado (aguardando smoke test e PR) |
-| Notification Service | Worker .NET 10 | — | ⏳ |
+| Medical Record Service | Microsserviço .NET 10 | 5004 | ✅ Concluído (smoke test + PR mergeado) |
+| Notification Service | Worker .NET 10 | — | ⏳ Próximo |
 | BFF Gateway | NestJS | 3000 | ⏳ |
 | Portal Web | Next.js 14 | — | ⏳ |
 | App Mobile | React Native + Expo | — | ⏳ |
@@ -173,7 +173,7 @@ Prontuário eletrônico do paciente. Clean Architecture em 4 projetos .NET 10, m
 
 Ver `services/medical-record/README.md` para documentação completa.
 
-**Pendente:** smoke test manual fim-a-fim com Docker (ambiente local não tinha Docker Desktop ativo durante a implementação) e abertura do PR.
+**Bugs de schema/migration corrigidos nos demais serviços (2026-06-20):** durante a implementação do Medical Record, foi identificado que Identity, Patient e Appointment tinham migrations EF que recriavam tabelas já criadas pelos respectivos `01-schema.sql` — corrigido nos 4 serviços (todas as migrations `Initial`/`InitialCreate` esvaziadas, schema agora é sempre gerenciado pelo SQL). No Appointment, também foi corrigido o filtro do índice `idx_consultas_slot_unico`, que usava valores de status em inglês e nunca liberava consultas canceladas/concluídas para reagendamento.
 
 ---
 
