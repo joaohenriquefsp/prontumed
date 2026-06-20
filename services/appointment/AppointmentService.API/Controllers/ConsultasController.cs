@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,6 +35,15 @@ public class ConsultasController(IMediator mediator) : ControllerBase
         [FromQuery] string? status, [FromQuery] DateTime? dataInicio, [FromQuery] DateTime? dataFim,
         [FromQuery] int pagina = 1, [FromQuery] int tamanhoPagina = 20, CancellationToken ct = default)
     {
+        // Doctor só pode ver suas próprias consultas (LGPD — minimização de dados)
+        if (User.IsInRole("Doctor"))
+        {
+            var sub = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(sub, out var idMedicoAutenticado))
+                return Unauthorized();
+            idMedico = idMedicoAutenticado;
+        }
+
         var resultado = await mediator.Send(
             new ListarConsultasQuery(idMedico, idPaciente, status, dataInicio, dataFim, pagina, tamanhoPagina), ct);
         return Ok(resultado);
