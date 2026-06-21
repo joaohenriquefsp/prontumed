@@ -21,7 +21,6 @@
     "transforms.outbox.table.field.event.key": "id_agregado",
     "transforms.outbox.table.field.event.type": "tipo_evento",
     "transforms.outbox.table.field.event.payload": "payload",
-    "transforms.outbox.table.field.event.timestamp": "criado_em",
     "transforms.outbox.table.fields.additional.placement": "tipo_evento:header:eventType",
 
     "key.converter": "org.apache.kafka.connect.storage.StringConverter",
