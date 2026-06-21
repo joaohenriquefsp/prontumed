@@ -56,6 +56,17 @@ public class PacientesController(IMediator mediator) : ControllerBase
         return Ok(dto);
     }
 
+    // Rota de uso exclusivo entre serviços internos (ex: Notification Service),
+    // que não atuam em nome de um usuário logado e por isso não possuem JWT.
+    // A confiança aqui é estabelecida pelo HmacValidationMiddleware, não pelo [Authorize].
+    [HttpGet("{id:guid}/interno")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ObterPorIdInterno(Guid id, CancellationToken ct)
+    {
+        var dto = await mediator.Send(new ObterPacientePorIdQuery(id), ct);
+        return Ok(dto);
+    }
+
     [HttpGet("cpf/{cpf}")]
     [Authorize(Roles = "Receptionist,Admin,Doctor")]
     public async Task<IActionResult> ObterPorCpf(string cpf, CancellationToken ct)
