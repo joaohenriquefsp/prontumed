@@ -115,6 +115,17 @@ Retorna dados completos de um paciente pelo ID.
 
 ---
 
+### `GET /pacientes/{id}/interno`
+Mesmo resultado de `GET /pacientes/{id}`, mas sem exigir JWT de usuário — apenas a assinatura HMAC. Uso exclusivo de serviços internos que não atuam em nome de um usuário logado (ex: Notification Service, que precisa do nome/e-mail do paciente para montar uma notificação a partir de um evento Kafka). **Não exposto pelo BFF.**
+
+**Response `200 OK`:** mesmo formato de `/pacientes/{id}`
+
+**Erros:**
+- `401` — assinatura HMAC ausente ou inválida
+- `404` — paciente não encontrado
+
+---
+
 ### `GET /pacientes/cpf/{cpf}` — `[Receptionist, Admin, Doctor]`
 Busca paciente pelo CPF (apenas dígitos, sem pontuação).
 
