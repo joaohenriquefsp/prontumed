@@ -26,8 +26,11 @@ CREATE TABLE IF NOT EXISTS logs_envio (
     -- Identificador único deste registro de entrega
     id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- ID do evento Kafka que originou esta notificação.
-    -- Permite rastrear qual agendamento ou ação gerou este envio.
+    -- ID do agregado (id_agregado = IdConsulta) que originou esta notificação.
+    -- É esse valor que o Debezium usa como chave da mensagem Kafka — não é
+    -- exclusivo por evento, pois se repete entre Agendada/Cancelada/Concluida
+    -- da mesma consulta. Por isso a idempotência abaixo combina este campo
+    -- com tipo_evento, não usa id_evento isoladamente.
     id_evento       UUID         NOT NULL,
 
     -- Tipo do evento que gerou a notificação (nome da classe do evento de domínio).
@@ -65,8 +68,10 @@ CREATE INDEX IF NOT EXISTS idx_logs_envio_id_destinatario ON logs_envio (id_dest
 CREATE INDEX IF NOT EXISTS idx_logs_envio_status          ON logs_envio (status);
 
 -- Garante que o mesmo evento Kafka não gere duas notificações no mesmo canal
--- (idempotência sob entrega "at-least-once" do Kafka/Debezium)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_logs_envio_evento_canal ON logs_envio (id_evento, canal);
+-- (idempotência sob entrega "at-least-once" do Kafka/Debezium).
+-- tipo_evento entra na chave porque id_evento (=id_agregado=IdConsulta) se
+-- repete entre Agendada/Cancelada/Concluida da mesma consulta.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_logs_envio_evento_canal ON logs_envio (id_evento, tipo_evento, canal);
 
 
 -- -------------------------------------------------------------
