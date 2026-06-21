@@ -7,7 +7,7 @@
 --                   Nunca produz eventos, por isso NÃO tem tabela eventos_saida.
 --
 -- COMO FUNCIONA:
---   1. Appointment Service publica 'AppointmentScheduled' no Kafka
+--   1. Appointment Service publica 'ConsultaAgendadaEvent' no Kafka
 --   2. Este worker consome o evento
 --   3. Busca o modelo de notificação correspondente (tabela abaixo)
 --   4. Envia e-mail e/ou push para o paciente e o médico
@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS logs_envio (
     -- Permite rastrear qual agendamento ou ação gerou este envio.
     id_evento       UUID         NOT NULL,
 
-    -- Tipo do evento que gerou a notificação.
-    -- Ex: 'AppointmentScheduled' | 'AppointmentCancelled' | 'AppointmentCompleted'
+    -- Tipo do evento que gerou a notificação (nome da classe do evento de domínio).
+    -- Ex: 'ConsultaAgendadaEvent' | 'ConsultaCanceladaEvent' | 'ConsultaConcluidaEvent'
     tipo_evento     VARCHAR(150) NOT NULL,
 
     -- ID do usuário que recebeu (ou deveria ter recebido) a notificação
@@ -64,6 +64,10 @@ CREATE INDEX IF NOT EXISTS idx_logs_envio_id_evento       ON logs_envio (id_even
 CREATE INDEX IF NOT EXISTS idx_logs_envio_id_destinatario ON logs_envio (id_destinatario);
 CREATE INDEX IF NOT EXISTS idx_logs_envio_status          ON logs_envio (status);
 
+-- Garante que o mesmo evento Kafka não gere duas notificações no mesmo canal
+-- (idempotência sob entrega "at-least-once" do Kafka/Debezium)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_logs_envio_evento_canal ON logs_envio (id_evento, canal);
+
 
 -- -------------------------------------------------------------
 -- TABELA: modelos_notificacao  (Modelos de mensagem)
@@ -72,15 +76,15 @@ CREATE INDEX IF NOT EXISTS idx_logs_envio_status          ON logs_envio (status)
 -- Usa variáveis no formato {{nome_variavel}} que são substituídas
 -- pelo worker no momento do envio com os dados reais do evento.
 --
--- Ex: "Olá {{patient_name}}, sua consulta com Dr(a). {{doctor_name}}
---      foi agendada para {{scheduled_at}}."
+-- Ex: "Olá {{nome_paciente}}, sua consulta com Dr(a). {{nome_medico}}
+--      foi agendada para {{data_hora}}."
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS modelos_notificacao (
 
     id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- Tipo de evento ao qual este modelo se aplica
-    -- Ex: 'AppointmentScheduled' | 'AppointmentCancelled'
+    -- Tipo de evento ao qual este modelo se aplica (nome da classe do evento de domínio)
+    -- Ex: 'ConsultaAgendadaEvent' | 'ConsultaCanceladaEvent'
     tipo_evento  VARCHAR(150) NOT NULL,
 
     -- Canal ao qual este modelo se aplica: 'Email' | 'Push'
@@ -115,28 +119,28 @@ CREATE TABLE IF NOT EXISTS modelos_notificacao (
 INSERT INTO modelos_notificacao (tipo_evento, canal, assunto, corpo_modelo) VALUES
 
   -- Consulta agendada → notifica paciente por e-mail
-  ('AppointmentScheduled', 'Email',
+  ('ConsultaAgendadaEvent', 'Email',
    'Consulta confirmada — ProntuMed',
-   'Olá {{patient_name}}, sua consulta com Dr(a). {{doctor_name}} foi agendada para {{scheduled_at}}. Em caso de dúvidas, entre em contato com a clínica.'),
+   'Olá {{nome_paciente}}, sua consulta com Dr(a). {{nome_medico}} foi agendada para {{data_hora}}. Em caso de dúvidas, entre em contato com a clínica.'),
 
   -- Consulta agendada → notificação push no app do paciente
-  ('AppointmentScheduled', 'Push',
+  ('ConsultaAgendadaEvent', 'Push',
    NULL,
-   'Consulta agendada para {{scheduled_at}} com Dr(a). {{doctor_name}}.'),
+   'Consulta agendada para {{data_hora}} com Dr(a). {{nome_medico}}.'),
 
   -- Consulta cancelada → notifica paciente por e-mail
-  ('AppointmentCancelled', 'Email',
+  ('ConsultaCanceladaEvent', 'Email',
    'Consulta cancelada — ProntuMed',
-   'Olá {{patient_name}}, sua consulta do dia {{scheduled_at}} com Dr(a). {{doctor_name}} foi cancelada. Motivo: {{reason}}.'),
+   'Olá {{nome_paciente}}, sua consulta do dia {{data_hora}} com Dr(a). {{nome_medico}} foi cancelada. Motivo: {{motivo}}.'),
 
   -- Consulta cancelada → notificação push no app do paciente
-  ('AppointmentCancelled', 'Push',
+  ('ConsultaCanceladaEvent', 'Push',
    NULL,
-   'Sua consulta do dia {{scheduled_at}} foi cancelada.'),
+   'Sua consulta do dia {{data_hora}} foi cancelada.'),
 
   -- Consulta realizada → push pedindo avaliação ao paciente
-  ('AppointmentCompleted', 'Push',
+  ('ConsultaConcluidaEvent', 'Push',
    NULL,
-   'Consulta concluída! Como foi sua experiência com Dr(a). {{doctor_name}}?')
+   'Consulta concluída! Como foi sua experiência com Dr(a). {{nome_medico}}?')
 
 ON CONFLICT (tipo_evento, canal) DO NOTHING;
