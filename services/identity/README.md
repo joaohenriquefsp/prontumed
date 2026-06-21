@@ -157,6 +157,17 @@ Retorna um usuário pelo ID.
 
 ---
 
+#### `GET /usuarios/{id}/interno`
+Mesmo resultado de `GET /usuarios/{id}`, mas sem exigir JWT de usuário — apenas a assinatura HMAC. Uso exclusivo de serviços internos que não atuam em nome de um usuário logado (ex: Notification Service, que precisa do nome/e-mail do médico para montar uma notificação a partir de um evento Kafka). **Não exposto pelo BFF.**
+
+**Response `200 OK`:** mesmo formato de `/usuarios/me`
+
+**Erros:**
+- `401` — assinatura HMAC ausente ou inválida
+- `404` — usuário não encontrado
+
+---
+
 #### `POST /usuarios` `[Admin]`
 Cria um novo usuário no sistema.
 
