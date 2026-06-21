@@ -43,6 +43,17 @@ public class UsuariosController(IMediator mediator) : ControllerBase
         return Ok(resultado);
     }
 
+    // Rota de uso exclusivo entre serviços internos (ex: Notification Service),
+    // que não atuam em nome de um usuário logado e por isso não possuem JWT.
+    // A confiança aqui é estabelecida pelo HmacValidationMiddleware, não pelo [Authorize].
+    [HttpGet("{id:guid}/interno")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ObterPorIdInterno(Guid id, CancellationToken ct)
+    {
+        var resultado = await mediator.Send(new ObterUsuarioPorIdQuery(id), ct);
+        return Ok(resultado);
+    }
+
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Criar([FromBody] CriarUsuarioCommand command, CancellationToken ct)
