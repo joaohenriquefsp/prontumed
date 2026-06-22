@@ -20,9 +20,9 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído + code review aplicado |
 | Medical Record Service | Microsserviço .NET 10 | 5004 | ✅ Concluído (smoke test + PR mergeado) |
 | Notification Service | Worker .NET 10 | — | ✅ Concluído (smoke test ponta a ponta) |
-| bff-web | NestJS | 3000 | ⏳ **Próximo** |
-| bff-mobile | NestJS | 3001 | ⏳ |
-| Portal Web | Next.js 14 | — | ⏳ |
+| bff-web | NestJS | 3000 | ✅ Concluído |
+| bff-mobile | NestJS | 3001 | ✅ Concluído |
+| Portal Web | Next.js 14 | — | ⏳ **Próximo** |
 | App Mobile | React Native + Expo | — | ⏳ |
 
 ---
