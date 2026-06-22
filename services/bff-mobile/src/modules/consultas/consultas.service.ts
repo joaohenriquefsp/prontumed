@@ -4,7 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { Request } from 'express';
 import { HmacService } from '../../common/hmac/hmac.service';
+import { RedisService } from '../../common/redis/redis.service';
 import { JwtPayload } from '../../common/decorators/current-user.decorator';
+
+const TTL_LISTA = 60;
+const TTL_DETALHE = 300;
 
 interface ConsultaRaw {
   id: string;
@@ -41,13 +45,17 @@ export class ConsultasService {
     private readonly http: HttpService,
     private readonly config: ConfigService,
     private readonly hmac: HmacService,
+    private readonly redis: RedisService,
   ) {
     this.appointmentUrl = this.config.getOrThrow<string>('APPOINTMENT_SERVICE_URL');
     this.identityUrl = this.config.getOrThrow<string>('IDENTITY_SERVICE_URL');
   }
 
   async minhasConsultas(user: JwtPayload, req: Request): Promise<ConsultaPacienteResponse[]> {
-    // O Appointment Service filtra por idPaciente quando o JWT tem perfil Patient
+    const cacheKey = `minhas-consultas:${user.sub}`;
+    const cached = await this.redis.get<ConsultaPacienteResponse[]>(cacheKey);
+    if (cached) return cached;
+
     const path = '/consultas';
     const headers = { ...this.hmac.gerarHeaders('GET', path), cookie: req.headers.cookie ?? '' };
 
@@ -59,7 +67,6 @@ export class ConsultasService {
 
     if (!consultas.length) return [];
 
-    // busca dados de todos os médicos únicos em paralelo
     const idsUnicos = [...new Set(consultas.map((c) => c.idMedico))];
     const medicos = await Promise.all(
       idsUnicos.map((id) => this.buscarUsuario(id, req)),
@@ -67,7 +74,7 @@ export class ConsultasService {
 
     const mapMedicos = new Map(medicos.map((m) => [m.id, m]));
 
-    return consultas.map((c) => {
+    const result = consultas.map((c) => {
       const medico = mapMedicos.get(c.idMedico);
       return {
         id: c.id,
@@ -82,9 +89,16 @@ export class ConsultasService {
         },
       };
     });
+
+    await this.redis.set(cacheKey, result, TTL_LISTA);
+    return result;
   }
 
   async detalhe(id: string, user: JwtPayload, req: Request): Promise<ConsultaPacienteResponse> {
+    const cacheKey = `consulta:detalhe:${id}`;
+    const cached = await this.redis.get<ConsultaPacienteResponse>(cacheKey);
+    if (cached) return cached;
+
     const path = `/consultas/${id}`;
     const headers = { ...this.hmac.gerarHeaders('GET', path), cookie: req.headers.cookie ?? '' };
 
@@ -96,7 +110,7 @@ export class ConsultasService {
 
     const medico = await this.buscarUsuario(consulta.idMedico, req);
 
-    return {
+    const result: ConsultaPacienteResponse = {
       id: consulta.id,
       dataHora: consulta.dataHora,
       status: consulta.status,
@@ -106,6 +120,9 @@ export class ConsultasService {
         nomeCompleto: `Dr(a). ${medico.primeiroNome} ${medico.sobrenome}`,
       },
     };
+
+    await this.redis.set(cacheKey, result, TTL_DETALHE);
+    return result;
   }
 
   private async buscarUsuario(id: string, req: Request): Promise<UsuarioRaw> {

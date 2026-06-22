@@ -31,6 +31,9 @@ pnpm run start:dev
 | `APPOINTMENT_SERVICE_URL` | URL do Appointment Service (ex: `http://localhost:5003`) |
 | `JWT_CHAVE` | Chave secreta JWT — mesma do Identity Service |
 | `HMAC_CHAVE` | Chave HMAC compartilhada com os microsserviços |
+| `REDIS_HOST` | Host do Redis (padrão: `localhost`) |
+| `REDIS_PORT` | Porta do Redis (padrão: `6379`) |
+| `KAFKA_BROKERS` | Brokers Kafka separados por vírgula. Deixar vazio desabilita o consumer |
 | `ALLOWED_ORIGINS` | Origins permitidas para CORS |
 
 ---
@@ -71,6 +74,14 @@ pnpm run start:dev
 |---|---|---|---|
 | `GET` | `/perfil` | JWT | Dados do usuário logado |
 
+### SSE — Real-time
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| `GET` | `/events` | JWT | Stream SSE — notificações quando consultas do usuário mudam |
+
+> O app mobile conecta em foreground e recebe `{ data: { tipo, idConsulta, idMedico, idPaciente } }` como sinal para refazer o fetch da tela ativa.
+
 ### Health
 
 | Método | Rota | Auth | Descrição |
@@ -86,7 +97,10 @@ src/
 ├── common/
 │   ├── decorators/   # CurrentUser, Roles
 │   ├── guards/       # JwtAuthGuard, RolesGuard
-│   └── hmac/         # HmacService (assina chamadas internas)
+│   ├── hmac/         # HmacService (assina chamadas internas)
+│   ├── redis/        # RedisService (cache read-through + invalidação)
+│   ├── events/       # EventsService + EventsController (GET /events SSE)
+│   └── kafka/        # KafkaConsumerService (consome prontumed.Consulta)
 └── modules/
     ├── auth/         # Login, refresh, logout
     ├── agenda/       # Tela de agenda do médico (compõe Appointment + Patient)

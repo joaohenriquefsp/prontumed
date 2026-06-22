@@ -4,9 +4,12 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { Request } from 'express';
 import { HmacService } from '../../common/hmac/hmac.service';
+import { RedisService } from '../../common/redis/redis.service';
 import { AgendarConsultaDto } from './dto/agendar-consulta.dto';
 import { CancelarConsultaDto } from './dto/cancelar-consulta.dto';
 import { CriarGradeHorarioDto } from './dto/criar-grade-horario.dto';
+
+const TTL_CONSULTA = 60;
 
 @Injectable()
 export class AppointmentsService {
@@ -16,6 +19,7 @@ export class AppointmentsService {
     private readonly http: HttpService,
     private readonly config: ConfigService,
     private readonly hmac: HmacService,
+    private readonly redis: RedisService,
   ) {
     this.appointmentUrl = this.config.getOrThrow<string>('APPOINTMENT_SERVICE_URL');
   }
@@ -32,9 +36,16 @@ export class AppointmentsService {
   }
 
   async obterConsulta(id: string, req: Request): Promise<unknown> {
+    const cacheKey = `consulta:${id}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return cached;
+
     const path = `/consultas/${id}`;
     const headers = { ...this.hmac.gerarHeaders('GET', path), cookie: this.cookieHeader(req) };
-    return this.get(`${this.appointmentUrl}${path}`, headers);
+    const data = await this.get(`${this.appointmentUrl}${path}`, headers);
+
+    await this.redis.set(cacheKey, data, TTL_CONSULTA);
+    return data;
   }
 
   async agendar(dto: AgendarConsultaDto, req: Request): Promise<unknown> {
@@ -45,18 +56,22 @@ export class AppointmentsService {
 
   async confirmar(id: string, req: Request): Promise<void> {
     await this.patch(`/consultas/${id}/confirmar`, {}, req);
+    await this.redis.del(`consulta:${id}`);
   }
 
   async cancelar(id: string, dto: CancelarConsultaDto, req: Request): Promise<void> {
     await this.patch(`/consultas/${id}/cancelar`, dto, req);
+    await this.redis.del(`consulta:${id}`);
   }
 
   async concluir(id: string, req: Request): Promise<void> {
     await this.patch(`/consultas/${id}/concluir`, {}, req);
+    await this.redis.del(`consulta:${id}`);
   }
 
   async noShow(id: string, req: Request): Promise<void> {
     await this.patch(`/consultas/${id}/no-show`, {}, req);
+    await this.redis.del(`consulta:${id}`);
   }
 
   async disponibilidade(idMedico: string, data: string, req: Request): Promise<unknown> {

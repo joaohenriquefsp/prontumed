@@ -4,7 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { Request } from 'express';
 import { HmacService } from '../../common/hmac/hmac.service';
+import { RedisService } from '../../common/redis/redis.service';
 import { JwtPayload } from '../../common/decorators/current-user.decorator';
+
+const TTL_HOJE = 60;
+const TTL_PROXIMAS = 120;
 
 interface ConsultaRaw {
   id: string;
@@ -43,17 +47,29 @@ export class AgendaService {
     private readonly http: HttpService,
     private readonly config: ConfigService,
     private readonly hmac: HmacService,
+    private readonly redis: RedisService,
   ) {
     this.appointmentUrl = this.config.getOrThrow<string>('APPOINTMENT_SERVICE_URL');
     this.patientUrl = this.config.getOrThrow<string>('PATIENT_SERVICE_URL');
   }
 
   async hoje(user: JwtPayload, req: Request): Promise<ConsultaAgendaResponse[]> {
-    const hoje = new Date().toISOString().split('T')[0];
-    return this.buscarEComporConsultas(user.sub, hoje, req);
+    const cacheKey = `agenda:hoje:${user.sub}`;
+    const cached = await this.redis.get<ConsultaAgendaResponse[]>(cacheKey);
+    if (cached) return cached;
+
+    const data = new Date().toISOString().split('T')[0];
+    const result = await this.buscarEComporConsultas(user.sub, data, req);
+
+    await this.redis.set(cacheKey, result, TTL_HOJE);
+    return result;
   }
 
   async proximas(user: JwtPayload, req: Request): Promise<ConsultaAgendaResponse[]> {
+    const cacheKey = `agenda:proximas:${user.sub}`;
+    const cached = await this.redis.get<ConsultaAgendaResponse[]>(cacheKey);
+    if (cached) return cached;
+
     const hoje = new Date().toISOString().split('T')[0];
     const qs = `idMedico=${user.sub}&dataInicio=${hoje}`;
     const path = '/consultas';
@@ -65,7 +81,9 @@ export class AgendaService {
       'Erro ao buscar próximas consultas.',
     );
 
-    return this.enriquecerConsultas(consultas, req);
+    const result = await this.enriquecerConsultas(consultas, req);
+    await this.redis.set(cacheKey, result, TTL_PROXIMAS);
+    return result;
   }
 
   async concluir(id: string, req: Request): Promise<void> {
@@ -118,7 +136,6 @@ export class AgendaService {
   ): Promise<ConsultaAgendaResponse[]> {
     if (!consultas.length) return [];
 
-    // busca dados de todos os pacientes únicos em paralelo
     const idsUnicos = [...new Set(consultas.map((c) => c.idPaciente))];
     const pacientes = await Promise.all(
       idsUnicos.map((id) => this.buscarPaciente(id, req)),

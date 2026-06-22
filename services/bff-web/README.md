@@ -33,6 +33,9 @@ pnpm run start:dev
 | `MEDICAL_RECORD_SERVICE_URL` | URL do Medical Record Service (ex: `http://localhost:5004`) |
 | `JWT_CHAVE` | Chave secreta JWT — mesma do Identity Service |
 | `HMAC_CHAVE` | Chave HMAC compartilhada com os microsserviços |
+| `REDIS_HOST` | Host do Redis (padrão: `localhost`) |
+| `REDIS_PORT` | Porta do Redis (padrão: `6379`) |
+| `KAFKA_BROKERS` | Brokers Kafka separados por vírgula (ex: `localhost:9092`). Deixar vazio desabilita o consumer |
 | `ALLOWED_ORIGINS` | Origins permitidas para CORS (separadas por vírgula) |
 
 ---
@@ -101,6 +104,14 @@ pnpm run start:dev
 | `GET` | `/prontuarios/:idPaciente/entradas/:id` | Doctor | Obter entrada |
 | `GET` | `/prontuarios/:idPaciente/historico` | Doctor, Admin | Histórico de eventos |
 
+### SSE — Real-time
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| `GET` | `/events` | JWT | Stream SSE — recebe notificações em tempo real quando dados do usuário logado mudam |
+
+> O cliente conecta e mantém a conexão aberta. O BFF envia eventos do tipo `{ data: { tipo, idConsulta, idMedico, idPaciente } }` quando um evento Kafka invalida o cache do usuário. O frontend usa isso como sinal para refazer o fetch dos dados afetados.
+
 ### Health
 
 | Método | Rota | Auth | Descrição |
@@ -116,7 +127,10 @@ src/
 ├── common/
 │   ├── decorators/     # CurrentUser, Roles
 │   ├── guards/         # JwtAuthGuard, RolesGuard
-│   └── hmac/           # HmacService (assina chamadas internas)
+│   ├── hmac/           # HmacService (assina chamadas internas)
+│   ├── redis/          # RedisService (cache read-through + invalidação)
+│   ├── events/         # EventsService + EventsController (GET /events SSE)
+│   └── kafka/          # KafkaConsumerService (consome prontumed.Consulta + prontumed.Paciente)
 └── modules/
     ├── auth/           # Login, refresh, logout, alterar-senha
     ├── users/          # Gestão de usuários (proxy → Identity Service)

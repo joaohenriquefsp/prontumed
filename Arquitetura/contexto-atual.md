@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-21 (Notification Service implementado)
+> Última atualização: 2026-06-22 (Redis + Kafka consumer + SSE nos BFFs)
 
 ---
 
@@ -20,8 +20,8 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído + code review aplicado |
 | Medical Record Service | Microsserviço .NET 10 | 5004 | ✅ Concluído (smoke test + PR mergeado) |
 | Notification Service | Worker .NET 10 | — | ✅ Concluído (smoke test ponta a ponta) |
-| bff-web | NestJS | 3000 | ✅ Concluído |
-| bff-mobile | NestJS | 3001 | ✅ Concluído |
+| bff-web | NestJS | 3000 | ✅ Concluído (Redis + Kafka + SSE) |
+| bff-mobile | NestJS | 3001 | ✅ Concluído (Redis + Kafka + SSE) |
 | Portal Web | Next.js 14 | — | ⏳ **Próximo** |
 | App Mobile | React Native + Expo | — | ⏳ |
 
@@ -49,6 +49,7 @@ Um único `docker compose up -d` sobe toda a infraestrutura:
 | `kafka` | 9092 | Event broker |
 | `kafka-ui` | 8080 | UI para ver tópicos e conectores |
 | `debezium-connect` | 8083 | CDC — lê WAL do PostgreSQL e publica no Kafka |
+| `prontumed-redis` | 6379 | Cache dos BFFs (ioredis, sem persistência em dev) |
 
 **Detalhe importante:** Todos os bancos sobem com `wal_level=logical` para habilitar o Debezium.
 
