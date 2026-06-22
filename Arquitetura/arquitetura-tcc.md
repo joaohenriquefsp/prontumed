@@ -74,7 +74,7 @@ Ferramenta de administração de banco de dados universal, utilizada durante o d
 ### 2.5 Mensageria e Eventos
 
 **Apache Kafka**  
-Plataforma distribuída de streaming de eventos, projetada para alta throughput, baixa latência e durabilidade de mensagens. Utilizado como Event Broker central da arquitetura. Eventos de domínio (ex: `ConsultaAgendada`, `PacienteCadastrado`) são publicados em tópicos Kafka e consumidos pelos serviços interessados de forma assíncrona e desacoplada.
+Plataforma distribuída de streaming de eventos, projetada para alta throughput, baixa latência e durabilidade de mensagens. Utilizado como Event Broker central da arquitetura. Eventos de domínio (ex: `ConsultaAgendadaEvent`, `PacienteCadastradoEvent`) são publicados em tópicos Kafka e consumidos pelos serviços interessados de forma assíncrona e desacoplada.
 
 **Debezium**  
 Plataforma open-source de Change Data Capture (CDC) baseada em Kafka Connect. Monitora o Write-Ahead Log (WAL) do PostgreSQL e captura automaticamente todas as alterações nas tabelas monitoradas (INSERT, UPDATE, DELETE), publicando-as como eventos no Kafka. Utilizado em conjunto com o Outbox Pattern para garantir entrega confiável de eventos sem two-phase commit.
@@ -177,10 +177,11 @@ Recepcionista (Portal Web)
     → Appointment Service [Command: AgendarConsulta]
       → Salva consulta + eventos_saida (transação atômica)
         → Debezium captura WAL
-          → Publica ConsultaAgendada no Kafka (tópico prontumed.Appointment)
+          → Publica ConsultaAgendadaEvent no Kafka (tópico prontumed.Consulta)
             → Notification Service consome evento
-              → Envia email ao paciente
-              → Envia push ao paciente (app) e ao médico (app)
+              → Busca dados do paciente/médico via HTTP+HMAC (Patient/Identity Service)
+              → Envia email ao paciente (real, via SMTP)
+              → Envia push ao paciente (simulado na v1 — depende do App Mobile existir)
 ```
 
 Este fluxo demonstra: separação de responsabilidades (CQRS), consistência eventual (Outbox + Debezium + Kafka), processamento assíncrono desacoplado (Event-Driven) e Zero Trust interno (HMAC).

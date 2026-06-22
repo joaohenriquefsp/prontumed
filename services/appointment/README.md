@@ -105,7 +105,7 @@ O estado da máquina é persistido em `estado_saga` com correlação pelo `id` d
 
 ## Eventos publicados (Outbox → Debezium → Kafka)
 
-Tópico: `prontumed.Appointment`
+Tópico: `prontumed.Consulta` (nome real = classe do Aggregate Root `Consulta`, não o nome do serviço)
 
 | Evento | Disparado quando |
 |---|---|

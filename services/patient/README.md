@@ -56,7 +56,7 @@ Header `Location: /pacientes/{id}`
 - `400` — CPF inválido, campos obrigatórios ausentes
 - `409` — CPF já cadastrado
 
-Publica `PacienteCadastradoEvent` na tabela `eventos_saida` → Kafka `prontumed.Patient`.
+Publica `PacienteCadastradoEvent` na tabela `eventos_saida` → Kafka `prontumed.Paciente`.
 
 ---
 
@@ -251,8 +251,10 @@ PatientService.API/
 
 ## Eventos publicados
 
-| Evento | Quando | Tópico Kafka |
-|---|---|---|
-| `PacienteCadastrado` | Novo paciente registrado | `prontumed.Patient` |
-| `PacienteAtualizado` | Dados do paciente alterados | `prontumed.Patient` |
-| `PacienteDesativado` | Paciente inativado | `prontumed.Patient` |
+Tópico: `prontumed.Paciente` (nome real = classe do Aggregate Root `Paciente`, não o nome do serviço; confirmado em testes)
+
+| Evento | Quando |
+|---|---|
+| `PacienteCadastradoEvent` | Novo paciente registrado |
+| `PacienteAtualizadoEvent` | Dados do paciente alterados |
+| `PacienteDesativadoEvent` | Paciente inativado |

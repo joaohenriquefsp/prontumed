@@ -65,13 +65,13 @@ Todos os nomes de tabelas e colunas estão em **português** (snake_case).
 
 ### ✅ Conectores Debezium (`infra/debezium/connectors/`)
 
-4 conectores JSON — um por serviço que produz eventos:
-- `identity-outbox-connector.json` → tópico `prontumed.User`
-- `patients-outbox-connector.json` → tópico `prontumed.Patient`
-- `appointments-outbox-connector.json` → tópico `prontumed.Appointment`
+4 conectores JSON — um por serviço que produz eventos. O nome real de cada tópico é a classe do Aggregate Root (`agregado.GetType().Name` no Outbox), não o nome do serviço — exceto Medical Record, que usa um valor fixo (`"MedicalRecord"`, hardcoded no `OutboxPublisher` porque o conector exige essa string exata):
+- `identity-outbox-connector.json` → tópico `prontumed.Usuario`
+- `patients-outbox-connector.json` → tópico `prontumed.Paciente`
+- `appointments-outbox-connector.json` → tópico `prontumed.Consulta`
 - `medical-outbox-connector.json` → tópico `prontumed.MedicalRecord`
 
-Todos os conectores usam campos em português (`tipo_agregado`, `id_agregado`, `tipo_evento`, `payload`, `criado_em`).
+Todos os conectores usam campos em português (`tipo_agregado`, `id_agregado`, `tipo_evento`, `payload`). O campo `criado_em` existe na tabela mas não é referenciado pelo conector (removido do `event.timestamp` do EventRouter — ver nota abaixo sobre o bug corrigido em 2026-06-21).
 
 Registrar conectores (rodar uma vez após o Docker subir):
 ```bash
@@ -139,7 +139,7 @@ Agendamento de consultas, grade de horários e controle de disponibilidade. Clea
 
 **Eventos publicados:** `ConsultaAgendadaEvent`, `ConsultaConfirmadaEvent`, `ConsultaCanceladaEvent`, `ConsultaConcluidaEvent`, `ConsultaNoShowEvent` → tópico `prontumed.Consulta`
 
-> **Nota sobre nome do tópico:** o tópico real não é `prontumed.Appointment` (documentado assim por engano em versões anteriores deste arquivo) — o Outbox usa `agregado.GetType().Name` como `tipo_agregado`, ou seja, o nome da classe do Aggregate Root (`Consulta`, em português), não o nome do serviço. Confirmado durante a implementação do Notification Service (2026-06-21). O mesmo desalinhamento provavelmente existe em Identity (`prontumed.Usuario`, não `prontumed.User`), Patient (`prontumed.Paciente`, confirmado, não `prontumed.Patient`) e Medical Record (`prontumed.Prontuario`, não `prontumed.MedicalRecord`) — ainda não corrigido na documentação desses serviços.
+> **Nota sobre nome do tópico:** o tópico real não é `prontumed.Appointment` (documentado assim por engano em versões anteriores deste arquivo) — o Outbox usa `agregado.GetType().Name` como `tipo_agregado`, ou seja, o nome da classe do Aggregate Root (`Consulta`, em português), não o nome do serviço. Confirmado durante a implementação do Notification Service (2026-06-21). O mesmo desalinhamento existia em Identity (`prontumed.Usuario`, real, vs `prontumed.User`, documentado) e Patient (`prontumed.Paciente`, real e confirmado em teste, vs `prontumed.Patient`, documentado) — corrigido em toda a documentação em 2026-06-21. **Medical Record é a exceção:** seu `OutboxPublisher` define `TipoAgregado = "MedicalRecord"` manualmente (hardcoded, comentário explica que o conector Debezium exige essa string exata), então `prontumed.MedicalRecord` já estava correto.
 
 **Bugfixes aplicados (2026-06-20) — 7 PRs mergeados:**
 

@@ -196,7 +196,7 @@ Header `Location: /usuarios/{id}`
 - `400` — validação (e-mail inválido, senha curta, perfil inválido)
 - `409` — e-mail já cadastrado
 
-Ao criar, publica o evento `UsuarioCriadoEvent` na tabela `eventos_saida` (Outbox Pattern), que o Debezium captura e publica no tópico Kafka `prontumed.User`.
+Ao criar, publica o evento `UsuarioCriadoEvent` na tabela `eventos_saida` (Outbox Pattern), que o Debezium captura e publica no tópico Kafka `prontumed.Usuario`.
 
 ---
 
@@ -322,7 +322,9 @@ IdentityService.API/           # Entrada HTTP
 
 ## Eventos publicados
 
-| Evento | Quando | Tópico Kafka |
-|---|---|---|
-| `UsuarioCriado` | Novo usuário cadastrado | `prontumed.User` |
-| `PerfilAlterado` | Perfil do usuário modificado | `prontumed.User` |
+Tópico: `prontumed.Usuario` (nome real = classe do Aggregate Root `Usuario`, não o nome do serviço)
+
+| Evento | Quando |
+|---|---|
+| `UsuarioCriadoEvent` | Novo usuário cadastrado |
+| `PerfilAlteradoEvent` | Perfil do usuário modificado |
