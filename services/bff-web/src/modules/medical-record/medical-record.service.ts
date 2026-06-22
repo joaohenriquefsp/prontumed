@@ -6,6 +6,8 @@ import { Request } from 'express';
 import { HmacService } from '../../common/hmac/hmac.service';
 import { AdicionarEntradaDto } from './dto/adicionar-entrada.dto';
 
+type AxiosErr = { response?: { data?: { message?: string }; status?: number } };
+
 @Injectable()
 export class MedicalRecordService {
   private readonly medicalRecordUrl: string;
@@ -34,8 +36,9 @@ export class MedicalRecordService {
     try {
       const response = await firstValueFrom(this.http.post(`${this.medicalRecordUrl}${path}`, {}, { headers }));
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao criar prontuário.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as AxiosErr;
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao criar prontuário.', e?.response?.status ?? 500);
     }
   }
 
@@ -45,8 +48,9 @@ export class MedicalRecordService {
     try {
       const response = await firstValueFrom(this.http.post(`${this.medicalRecordUrl}${path}`, dto, { headers }));
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao adicionar entrada.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as AxiosErr;
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao adicionar entrada.', e?.response?.status ?? 500);
     }
   }
 
@@ -66,8 +70,9 @@ export class MedicalRecordService {
     try {
       const response = await firstValueFrom(this.http.get(url, { headers }));
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao consultar prontuário.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as AxiosErr;
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao consultar prontuário.', e?.response?.status ?? 500);
     }
   }
 }

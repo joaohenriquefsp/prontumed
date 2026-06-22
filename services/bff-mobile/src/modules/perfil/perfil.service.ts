@@ -5,6 +5,8 @@ import { firstValueFrom } from 'rxjs';
 import { Request } from 'express';
 import { HmacService } from '../../common/hmac/hmac.service';
 
+type AxiosErr = { response?: { data?: { message?: string }; status?: number } };
+
 @Injectable()
 export class PerfilService {
   private readonly identityUrl: string;
@@ -24,10 +26,11 @@ export class PerfilService {
     try {
       const response = await firstValueFrom(this.http.get(`${this.identityUrl}${path}`, { headers }));
       return response.data;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as AxiosErr;
       throw new HttpException(
-        err?.response?.data?.message ?? 'Erro ao buscar perfil.',
-        err?.response?.status ?? 500,
+        e?.response?.data?.message ?? 'Erro ao buscar perfil.',
+        e?.response?.status ?? 500,
       );
     }
   }

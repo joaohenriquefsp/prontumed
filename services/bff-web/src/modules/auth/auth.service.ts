@@ -2,10 +2,12 @@ import { Injectable, UnauthorizedException, HttpException } from '@nestjs/common
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { Response, Request } from 'express';
+import type { Response, Request } from 'express';
 import { HmacService } from '../../common/hmac/hmac.service';
 import { LoginDto } from './dto/login.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+
+type AxiosErr = { response?: { data?: { message?: string }; status?: number } };
 
 @Injectable()
 export class AuthService {
@@ -38,10 +40,9 @@ export class AuthService {
       }
 
       res.json(response.data);
-    } catch (err: any) {
-      const status = err?.response?.status ?? 500;
-      const message = err?.response?.data?.message ?? 'Erro ao autenticar.';
-      throw new HttpException(message, status);
+    } catch (err: unknown) {
+      const e = err as AxiosErr;
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao autenticar.', e?.response?.status ?? 500);
     }
   }
 
@@ -104,10 +105,9 @@ export class AuthService {
           headers: { ...headers, cookie: cookieHeader },
         }),
       );
-    } catch (err: any) {
-      const status = err?.response?.status ?? 500;
-      const message = err?.response?.data?.message ?? 'Erro ao alterar senha.';
-      throw new HttpException(message, status);
+    } catch (err: unknown) {
+      const e = err as AxiosErr;
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao alterar senha.', e?.response?.status ?? 500);
     }
   }
 }

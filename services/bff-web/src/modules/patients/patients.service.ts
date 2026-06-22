@@ -66,8 +66,9 @@ export class PatientsService {
       const response = await firstValueFrom(this.http.post(`${this.patientUrl}${path}`, dto, { headers }));
       await this.redis.del('pacientes:lista');
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao cadastrar paciente.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao cadastrar paciente.', e?.response?.status ?? 500);
     }
   }
 
@@ -78,8 +79,9 @@ export class PatientsService {
       const response = await firstValueFrom(this.http.put(`${this.patientUrl}${path}`, dto, { headers }));
       await this.redis.del(`paciente:${id}`, 'pacientes:lista');
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao atualizar paciente.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao atualizar paciente.', e?.response?.status ?? 500);
     }
   }
 
@@ -89,8 +91,9 @@ export class PatientsService {
     try {
       await firstValueFrom(this.http.patch(`${this.patientUrl}${path}`, {}, { headers }));
       await this.redis.del(`paciente:${id}`, 'pacientes:lista');
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao desativar paciente.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao desativar paciente.', e?.response?.status ?? 500);
     }
   }
 
@@ -98,8 +101,9 @@ export class PatientsService {
     try {
       const response = await firstValueFrom(this.http.get(url, { headers }));
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao consultar paciente.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao consultar paciente.', e?.response?.status ?? 500);
     }
   }
 }

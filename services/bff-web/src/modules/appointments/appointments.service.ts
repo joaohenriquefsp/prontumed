@@ -99,8 +99,9 @@ export class AppointmentsService {
     const headers = { ...this.hmac.gerarHeaders('DELETE', path), cookie: this.cookieHeader(req) };
     try {
       await firstValueFrom(this.http.delete(`${this.appointmentUrl}${path}`, { headers }));
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao deletar grade horária.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao deletar grade horária.', e?.response?.status ?? 500);
     }
   }
 
@@ -108,8 +109,9 @@ export class AppointmentsService {
     try {
       const response = await firstValueFrom(this.http.get(url, { headers }));
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao consultar agendamento.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao consultar agendamento.', e?.response?.status ?? 500);
     }
   }
 
@@ -117,8 +119,9 @@ export class AppointmentsService {
     try {
       const response = await firstValueFrom(this.http.post(url, body, { headers }));
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao processar agendamento.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao processar agendamento.', e?.response?.status ?? 500);
     }
   }
 
@@ -126,8 +129,9 @@ export class AppointmentsService {
     const headers = { ...this.hmac.gerarHeaders('PATCH', path), cookie: this.cookieHeader(req) };
     try {
       await firstValueFrom(this.http.patch(`${this.appointmentUrl}${path}`, body, { headers }));
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? 'Erro ao atualizar consulta.', err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? 'Erro ao atualizar consulta.', e?.response?.status ?? 500);
     }
   }
 }

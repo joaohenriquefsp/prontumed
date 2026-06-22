@@ -2,9 +2,11 @@ import { Injectable, UnauthorizedException, HttpException } from '@nestjs/common
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { Response, Request } from 'express';
+import type { Response, Request } from 'express';
 import { HmacService } from '../../common/hmac/hmac.service';
 import { LoginDto } from './dto/login.dto';
+
+type AxiosErr = { response?: { data?: { message?: string }; status?: number } };
 
 @Injectable()
 export class AuthService {
@@ -34,10 +36,11 @@ export class AuthService {
       }
 
       res.json(response.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as AxiosErr;
       throw new HttpException(
-        err?.response?.data?.message ?? 'Erro ao autenticar.',
-        err?.response?.status ?? 500,
+        e?.response?.data?.message ?? 'Erro ao autenticar.',
+        e?.response?.status ?? 500,
       );
     }
   }

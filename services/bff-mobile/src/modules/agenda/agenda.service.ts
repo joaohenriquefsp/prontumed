@@ -91,10 +91,11 @@ export class AgendaService {
     const headers = { ...this.hmac.gerarHeaders('PATCH', path), cookie: req.headers.cookie ?? '' };
     try {
       await firstValueFrom(this.http.patch(`${this.appointmentUrl}${path}`, {}, { headers }));
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
       throw new HttpException(
-        err?.response?.data?.message ?? 'Erro ao concluir consulta.',
-        err?.response?.status ?? 500,
+        e?.response?.data?.message ?? 'Erro ao concluir consulta.',
+        e?.response?.status ?? 500,
       );
     }
   }
@@ -104,10 +105,11 @@ export class AgendaService {
     const headers = { ...this.hmac.gerarHeaders('PATCH', path), cookie: req.headers.cookie ?? '' };
     try {
       await firstValueFrom(this.http.patch(`${this.appointmentUrl}${path}`, {}, { headers }));
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
       throw new HttpException(
-        err?.response?.data?.message ?? 'Erro ao registrar ausência.',
-        err?.response?.status ?? 500,
+        e?.response?.data?.message ?? 'Erro ao registrar ausência.',
+        e?.response?.status ?? 500,
       );
     }
   }
@@ -171,8 +173,9 @@ export class AgendaService {
     try {
       const response = await firstValueFrom(this.http.get<T>(url, { headers }));
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? errorMsg, err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? errorMsg, e?.response?.status ?? 500);
     }
   }
 }

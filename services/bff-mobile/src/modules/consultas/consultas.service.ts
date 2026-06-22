@@ -135,8 +135,9 @@ export class ConsultasService {
     try {
       const response = await firstValueFrom(this.http.get<T>(url, { headers }));
       return response.data;
-    } catch (err: any) {
-      throw new HttpException(err?.response?.data?.message ?? errorMsg, err?.response?.status ?? 500);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string }; status?: number } };
+      throw new HttpException(e?.response?.data?.message ?? errorMsg, e?.response?.status ?? 500);
     }
   }
 }
