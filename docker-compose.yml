@@ -197,6 +197,22 @@ services:
       start_period: 30s
 
   # ─────────────────────────────────────────────────────
+  # SMTP4DEV — servidor SMTP de desenvolvimento
+  # Captura todos os e-mails enviados pelo Notification Service
+  # sem entregá-los de fato. UI de inspeção: http://localhost:5080
+  # ─────────────────────────────────────────────────────
+
+  smtp4dev:
+    image: rnwood/smtp4dev:v3
+    container_name: smtp4dev
+    ports:
+      - "5080:80"
+      - "2525:25"
+    networks:
+      - prontumed-net
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────────────
   # KAFKA UI — visualização de tópicos e conectores
   # Acesso: http://localhost:8080
   # ─────────────────────────────────────────────────────
