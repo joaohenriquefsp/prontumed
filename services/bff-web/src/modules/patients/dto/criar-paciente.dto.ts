@@ -1,4 +1,4 @@
-import { IsDateString, IsEmail, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsDateString, IsEmail, IsString, Length, Matches } from 'class-validator';
 
 export class CriarPacienteDto {
   @IsString()
