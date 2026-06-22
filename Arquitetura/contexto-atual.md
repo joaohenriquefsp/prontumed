@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-21 (Notification Service implementado)
+> Última atualização: 2026-06-22 (Redis + Kafka consumer + SSE nos BFFs)
 
 ---
 
@@ -20,8 +20,9 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído + code review aplicado |
 | Medical Record Service | Microsserviço .NET 10 | 5004 | ✅ Concluído (smoke test + PR mergeado) |
 | Notification Service | Worker .NET 10 | — | ✅ Concluído (smoke test ponta a ponta) |
-| BFF Gateway | NestJS | 3000 | ⏳ Próximo |
-| Portal Web | Next.js 14 | — | ⏳ |
+| bff-web | NestJS | 3000 | ✅ Concluído (Redis + Kafka + SSE) |
+| bff-mobile | NestJS | 3001 | ✅ Concluído (Redis + Kafka + SSE) |
+| Portal Web | Next.js 14 | — | ⏳ **Próximo** |
 | App Mobile | React Native + Expo | — | ⏳ |
 
 ---
@@ -48,6 +49,7 @@ Um único `docker compose up -d` sobe toda a infraestrutura:
 | `kafka` | 9092 | Event broker |
 | `kafka-ui` | 8080 | UI para ver tópicos e conectores |
 | `debezium-connect` | 8083 | CDC — lê WAL do PostgreSQL e publica no Kafka |
+| `prontumed-redis` | 6379 | Cache dos BFFs (ioredis, sem persistência em dev) |
 
 **Detalhe importante:** Todos os bancos sobem com `wal_level=logical` para habilitar o Debezium.
 
@@ -314,11 +316,21 @@ Acesse a documentação de cada serviço (exceto Notification, que não tem API 
 
 ---
 
-## Próximo serviço: BFF Gateway
+## Próximos serviços: BFF Web e BFF Mobile
 
-**Tipo:** NestJS | **Porta:** `3000` | **Branch:** `feat/bff-gateway`
+Dois BFFs NestJS dedicados — um por tipo de cliente (padrão BFF de Sam Newman). Código compartilhado extraído para um pacote interno `@prontumed/bff-core` (HMAC, HTTP clients, guards base).
 
-Único ponto de entrada para Portal Web e App Mobile. Ver seção "Camada de Entrada — BFF NestJS" em `Arquitetura/arquitetura-software.md` para o desenho já definido.
+### bff-web (implementar primeiro)
+**Tipo:** NestJS | **Porta:** `3000` | **Branch:** `feat/bff-web`
+
+Atende o Portal Web com todos os perfis: Doctor, Receptionist, Admin, Patient. Consome todos os microsserviços: Identity, Patient, Appointment, Medical Record.
+
+### bff-mobile (implementar depois)
+**Tipo:** NestJS | **Porta:** `3001` | **Branch:** `feat/bff-mobile`
+
+Atende o App Mobile com perfis Doctor e Patient. Consome Identity, Patient e Appointment (sem Medical Record na v1 — prontuário completo é funcionalidade do Portal Web).
+
+Ver seção "Camada de Entrada — BFF NestJS" em `Arquitetura/arquitetura-software.md` para o desenho completo.
 
 ---
 
@@ -327,8 +339,8 @@ Acesse a documentação de cada serviço (exceto Notification, que não tem API 
 | Decisão | Escolha | Motivo |
 |---|---|---|
 | Monorepo único | 1 `git clone` | Simples para TCC |
-| NestJS como BFF | Um único, sem Kong | Kong é caixa preta — BFF em código é explicável para a banca |
-| BFF por cliente | Não por microsserviço | Portal Web + App Mobile compartilham o mesmo BFF |
+| NestJS como BFF | Dois BFFs (bff-web + bff-mobile), sem Kong | Kong é caixa preta — BFF em código é explicável para a banca |
+| BFF por tipo de cliente | Um por frontend (web e mobile) | Padrão BFF correto: cada cliente tem composição de resposta e evolução independente |
 | HMAC | BFF assina → microsserviços validam (Method+Path+QueryString+Timestamp+Nonce) | Zero Trust interno sem infra extra |
 | Validação dupla | BFF (formato) + microsserviço (negócio) | Cada camada defende seu próprio perímetro |
 | Event Sourcing | Apenas Medical Record | CFM/LGPD exigem imutabilidade do prontuário |

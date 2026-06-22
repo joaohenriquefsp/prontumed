@@ -202,6 +202,24 @@ services:
   # sem entregá-los de fato. UI de inspeção: http://localhost:5080
   # ─────────────────────────────────────────────────────
 
+  # ─────────────────────────────────────────────────────
+  # REDIS — cache dos BFFs
+  # ─────────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: prontumed-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - prontumed-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   smtp4dev:
     image: rnwood/smtp4dev:v3
     container_name: smtp4dev
@@ -280,6 +298,7 @@ services:
 # ─────────────────────────────────────────────────────
 
 volumes:
+  redis-data:
   pgdata-identity:
   pgdata-patients:
   pgdata-appointments:

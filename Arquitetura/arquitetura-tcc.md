@@ -38,7 +38,7 @@ Biblioteca de logging estruturado para .NET. Logs são emitidos em formato JSON,
 ### 2.2 API Gateway / BFF
 
 **NestJS**  
-Framework Node.js progressivo para construção de aplicações server-side eficientes e escaláveis. Utilizado como BFF (Backend For Frontend), é o único ponto de entrada para todos os clientes do sistema — um único BFF atende tanto o Portal Web quanto o App Mobile, organizando suas rotas por perfil de cliente. Responsável por validação de formato dos dados de entrada, validação de tokens JWT, autorização RBAC, roteamento para microsserviços internos, composição de respostas e assinatura HMAC nas chamadas internas. A validação de regras de negócio (unicidade, invariantes de domínio) é responsabilidade de cada microsserviço — o BFF não é trusted pelos serviços internos.
+Framework Node.js progressivo para construção de aplicações server-side eficientes e escaláveis. Utilizado na implementação de dois BFFs (Backend For Frontend) dedicados, seguindo o padrão definido por Sam Newman: `bff-web` (porta 3000), que atende o Portal Web com todos os perfis de usuário (Médico, Recepcionista, Admin e Paciente), e `bff-mobile` (porta 3001), que atende o App Mobile com perfis Doctor e Patient, com payloads otimizados para dispositivos móveis. Essa separação permite que cada cliente evolua de forma independente sem impactar o outro. Lógica compartilhada entre os dois BFFs (assinatura HMAC, HTTP clients para microsserviços, guards de autenticação base) é extraída para um pacote interno `@prontumed/bff-core`. Cada BFF é responsável por validação de formato dos dados de entrada, validação de tokens JWT, autorização RBAC, roteamento para microsserviços internos, composição de respostas e assinatura HMAC nas chamadas internas. A validação de regras de negócio (unicidade, invariantes de domínio) é responsabilidade de cada microsserviço — os BFFs não são trusted pelos serviços internos.
 
 **Passport.js**  
 Middleware de autenticação para Node.js, integrado ao NestJS para implementação do fluxo OAuth2 com PKCE. Gerencia a validação de tokens JWT emitidos pelo Identity Service.
@@ -148,7 +148,7 @@ Agendado → Confirmado → Concluido
 Essa abordagem é preferida a um Saga orquestrado cross-service por dois motivos: (1) toda a lógica de negócio de agendamento pertence ao mesmo Bounded Context, portanto não há justificativa para distribuir a transação entre serviços; (2) a complexidade operacional de coordenar múltiplos serviços com two-phase commit ou compensação remota não traz benefício para o domínio clínico do MVP. A consistência eventual entre Appointment Service e Notification Service é garantida pelo Outbox + Debezium, que é tratamento adequado para comunicação assíncrona entre contextos distintos.
 
 ### 3.6 BFF (Backend For Frontend)
-Camada intermediária dedicada entre frontends e microsserviços. Diferentemente de um API Gateway genérico, o BFF é otimizado para as necessidades específicas de cada cliente, compondo respostas que agregam dados de múltiplos serviços em uma única requisição. Reduz over-fetching e under-fetching nos frontends.
+Camada intermediária dedicada entre frontends e microsserviços. O padrão BFF, definido por Sam Newman, determina um backend por tipo de cliente — cada frontend tem necessidades distintas de composição de dados e ciclo de evolução. O sistema implementa dois BFFs NestJS: `bff-web` (porta 3000) para o Portal Web, com suporte a todos os perfis e composição rica de dados; e `bff-mobile` (porta 3001) para o App Mobile, com payloads menores otimizados para dispositivos móveis e foco em agenda e notificações. Diferentemente de um API Gateway genérico, cada BFF compõe respostas específicas por cliente, reduzindo over-fetching e under-fetching. Código compartilhado (HMAC, HTTP clients, guards) é centralizado no pacote `@prontumed/bff-core`.
 
 ### 3.7 Database per Service
 Cada microsserviço possui sua própria instância de banco de dados PostgreSQL, completamente isolada. Nenhum serviço acessa o banco de outro diretamente. A comunicação entre serviços ocorre exclusivamente via eventos Kafka ou chamadas REST através do BFF. Isso garante acoplamento mínimo e permite que cada serviço evolua seu schema de forma independente.
@@ -173,7 +173,7 @@ O fluxo abaixo demonstra a integração entre os padrões aplicados em um cenár
 
 ```
 Recepcionista (Portal Web)
-  → BFF NestJS [valida JWT + RBAC + HMAC]
+  → bff-web [valida JWT + RBAC + assina HMAC]
     → Appointment Service [Command: AgendarConsulta]
       → Salva consulta + eventos_saida (transação atômica)
         → Debezium captura WAL
