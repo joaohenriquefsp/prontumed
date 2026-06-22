@@ -40,28 +40,43 @@ Sistema de gestão clínica baseado em microsserviços, projetado para clínicas
 
 ## Camada de Entrada — BFF NestJS
 
-**Um único BFF para todos os clientes** — não um BFF por microsserviço. O BFF é organizado por *cliente* (Portal Web e App Mobile), não por domínio de backend.
+**Dois BFFs dedicados — um por tipo de cliente.** O padrão BFF (Backend For Frontend) determina um backend por tipo de frontend, pois cada cliente tem necessidades distintas de composição de dados, payload e ciclo de evolução independente.
 
 ```
-Portal Web  ─┐
-             ├──▶  BFF NestJS (porta 3000)  ──▶  Identity Service
-App Mobile  ─┘                              ──▶  Patient Service
-                                            ──▶  Appointment Service
-                                            ──▶  Medical Record Service
-                                            ──▶  Notification Service
+Portal Web  ──▶  bff-web    (porta 3000)  ──▶  Identity Service
+                                          ──▶  Patient Service
+                                          ──▶  Appointment Service
+                                          ──▶  Medical Record Service
+
+App Mobile  ──▶  bff-mobile (porta 3001)  ──▶  Identity Service
+                                          ──▶  Patient Service
+                                          ──▶  Appointment Service
 ```
 
-Responsabilidades do BFF:
-- Validação de tokens JWT (OAuth2)
-- Autorização RBAC por rota
-- Roteamento para microsserviços internos
-- Composição de respostas (agregação de dados de múltiplos serviços)
+Código compartilhado entre os dois BFFs (pacote interno `@prontumed/bff-core`):
 - Assinatura HMAC em todas as chamadas para serviços internos
+- Validação e renovação de tokens JWT
+- HTTP clients para cada microsserviço
+- Guards de autenticação base
+
+Responsabilidades de cada BFF:
+- Autorização RBAC por rota (guards específicos por cliente)
+- Roteamento para microsserviços internos
+- Composição de respostas otimizada para o cliente (payload menor no mobile)
 - Validação de formato dos dados de entrada (antes de enviar ao microsserviço)
 - Rate limiting por cliente
 
-**Porta:** `3000`  
+**Portas:** `bff-web: 3000` | `bff-mobile: 3001`  
 **Tecnologia:** NestJS + Passport.js + HMAC request signing
+
+### Perfis atendidos por BFF
+
+| BFF | Perfis | Microsserviços consumidos |
+|---|---|---|
+| `bff-web` | Doctor, Receptionist, Admin, Patient | Identity, Patient, Appointment, Medical Record |
+| `bff-mobile` | Doctor, Patient | Identity, Patient, Appointment |
+
+> O `bff-mobile` não consome o Medical Record Service na v1 — o prontuário completo é funcionalidade do Portal Web. O App Mobile foca em agenda e notificações.
 
 ---
 
@@ -397,13 +412,16 @@ kafka                   :9092
 kafka-ui                :8080  ← visualizar tópicos em dev
 debezium-connect        :8083
 
-# Serviços
+# Serviços internos
 identity-service        :5001
 patient-service         :5002
 appointment-service     :5003
 medical-record-service  :5004
 notification-service    (worker)
-gateway                 :3000  ← entry point único
+
+# BFFs — entry points dos clientes
+bff-web                 :3000  ← Portal Web
+bff-mobile              :3001  ← App Mobile
 ```
 
 ---
@@ -412,11 +430,11 @@ gateway                 :3000  ← entry point único
 
 ```
 1. Recepcionista abre agenda
-   → Portal Web → BFF → Professional/Appointment Service (GET disponibilidade)
+   → Portal Web → bff-web → Appointment Service (GET disponibilidade)
 
 2. Recepcionista confirma agendamento
-   → Portal Web → BFF → Appointment Service (POST)
-   → Salva appointment + outbox_events (mesma transação)
+   → Portal Web → bff-web → Appointment Service (POST)
+   → Salva consulta + eventos_saida (mesma transação)
 
 3. Debezium captura
    → Lê WAL de db_appointments
@@ -426,7 +444,8 @@ gateway                 :3000  ← entry point único
    → Busca dados do paciente/médico via HTTP+HMAC (Patient/Identity Service)
    → Dispara email (real) + push (simulado na v1) para o paciente
 
-5. Portal Web e App recebem push em tempo real
+5. App Mobile recebe push em tempo real
+   → bff-mobile expõe endpoints de consulta para o paciente e médico
 ```
 
 ---
@@ -445,9 +464,9 @@ gateway                 :3000  ← entry point único
 **Decisão:** Outbox Pattern com CDC via Debezium  
 **Motivo:** Publicação direta no Kafka após save no banco cria janela de falha. O Outbox salva na mesma transação. Debezium entrega quando Kafka estiver disponível. Zero perda de eventos.
 
-### ADR-004 — BFF NestJS ao invés de API Gateway genérico
-**Decisão:** Backend For Frontend dedicado  
-**Motivo:** Cada cliente (web, mobile) tem necessidades distintas de composição de dados. O BFF agrega respostas específicas por cliente, evitando over-fetching no frontend.
+### ADR-004 — Dois BFFs dedicados por tipo de cliente
+**Decisão:** Um BFF NestJS por tipo de frontend: `bff-web` (porta 3000) para o Portal Web e `bff-mobile` (porta 3001) para o App Mobile. Código compartilhado extraído para o pacote `@prontumed/bff-core`.  
+**Motivo:** O padrão BFF (Sam Newman) define um backend por tipo de cliente — cada frontend tem necessidades distintas de composição de dados, payload e ciclo de evolução. O Portal Web precisa de respostas ricas com dados para múltiplos perfis (Médico, Recepcionista, Admin, Paciente); o App Mobile precisa de payloads menores e endpoints otimizados para Médico e Paciente. Um BFF único forçaria condicionais por tipo de cliente dentro do código ou retornaria sempre o payload maior para ambos. A separação permite que cada BFF evolua de forma independente sem afetar o outro. Um API Gateway genérico (ex: Kong) foi descartado por ser caixa preta — difícil de explicar para a banca e de depurar em desenvolvimento.
 
 ### ADR-005 — Single-tenant no MVP
 **Decisão:** Single-tenant com estrutura preparada para multi-tenant  
