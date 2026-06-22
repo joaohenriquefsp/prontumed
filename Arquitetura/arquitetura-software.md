@@ -91,10 +91,9 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 **Banco:** `db_identity`  
 **Responsabilidade:** Autenticação, gestão de usuários, roles e permissões. Emite e valida JWTs.
 
-**Eventos publicados:**
-- `UserCreated`
-- `UserRoleChanged`
-- `PasswordReset`
+**Eventos publicados** (tópico `prontumed.Usuario` — nome real = classe do Aggregate Root `Usuario`, não o nome do serviço):
+- `UsuarioCriadoEvent`
+- `PerfilAlteradoEvent`
 
 ---
 
@@ -118,10 +117,10 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 - Endereço: campos separados (não JSONB) para facilitar busca e filtragem
 - Soft delete: campo `ativo` — registros inativados são mantidos (exigência LGPD)
 
-**Eventos publicados:**
-- `PacienteCadastrado`
-- `PacienteAtualizado`
-- `PacienteDesativado`
+**Eventos publicados** (tópico `prontumed.Paciente` — nome real = classe do Aggregate Root `Paciente`, não o nome do serviço; confirmado em testes):
+- `PacienteCadastradoEvent`
+- `PacienteAtualizadoEvent`
+- `PacienteDesativadoEvent`
 
 ---
 
@@ -167,7 +166,7 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 
 > Notificar o médico (ex: push de novo agendamento) está fora do escopo da v1 — depende do App Mobile existir para haver onde registrar o push token do médico.
 
-**Enriquecimento de dados:** os eventos do Appointment só carregam IDs. O worker busca nome/e-mail do paciente e do médico via HTTP síncrono assinado com HMAC, chamando rotas dedicadas a uso interno (`GET /pacientes/{id}/interno`, `GET /usuarios/{id}/interno` — ver ADR-007) com retry via Polly. Essa decisão prioriza simplicidade sobre desacoplamento total: um read model local (réplica de dados via eventos `PacienteCadastrado`/`UsuarioCriado`) seria mais resiliente a indisponibilidade dos outros serviços, mas exigiria alterar o formato de eventos já publicados (que hoje não carregam e-mail) e adicionar dois consumers + tabelas extras — custo não justificado para o MVP.
+**Enriquecimento de dados:** os eventos do Appointment só carregam IDs. O worker busca nome/e-mail do paciente e do médico via HTTP síncrono assinado com HMAC, chamando rotas dedicadas a uso interno (`GET /pacientes/{id}/interno`, `GET /usuarios/{id}/interno` — ver ADR-007) com retry via Polly. Essa decisão prioriza simplicidade sobre desacoplamento total: um read model local (réplica de dados via eventos `PacienteCadastradoEvent`/`UsuarioCriadoEvent`) seria mais resiliente a indisponibilidade dos outros serviços, mas exigiria alterar o formato de eventos já publicados (que hoje não carregam e-mail) e adicionar dois consumers + tabelas extras — custo não justificado para o MVP.
 
 **Envio:** e-mail real via SMTP (MailKit), apontando em dev para o container `smtp4dev`. Push é um stub que registra log + `logs_envio`, sem integração real (sem App Mobile ainda não há push token para enviar de fato).
 
@@ -421,11 +420,11 @@ gateway                 :3000  ← entry point único
 
 3. Debezium captura
    → Lê WAL de db_appointments
-   → Publica ConsultaAgendada no Kafka
+   → Publica ConsultaAgendadaEvent no Kafka (tópico prontumed.Consulta)
 
 4. Notification Service consome
-   → Dispara email + push para paciente
-   → Dispara push para médico
+   → Busca dados do paciente/médico via HTTP+HMAC (Patient/Identity Service)
+   → Dispara email (real) + push (simulado na v1) para o paciente
 
 5. Portal Web e App recebem push em tempo real
 ```
