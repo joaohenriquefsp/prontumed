@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-20 (Medical Record Service implementado)
+> Última atualização: 2026-06-21 (Notification Service implementado)
 
 ---
 
@@ -19,8 +19,8 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Patient Service | Microsserviço .NET 10 | 5002 | ✅ Concluído + revisado |
 | Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído + code review aplicado |
 | Medical Record Service | Microsserviço .NET 10 | 5004 | ✅ Concluído (smoke test + PR mergeado) |
-| Notification Service | Worker .NET 10 | — | ⏳ Próximo |
-| BFF Gateway | NestJS | 3000 | ⏳ |
+| Notification Service | Worker .NET 10 | — | ✅ Concluído (smoke test ponta a ponta) |
+| BFF Gateway | NestJS | 3000 | ⏳ Próximo |
 | Portal Web | Next.js 14 | — | ⏳ |
 | App Mobile | React Native + Expo | — | ⏳ |
 
@@ -137,7 +137,9 @@ Agendamento de consultas, grade de horários e controle de disponibilidade. Clea
 - `Agendado → Concluido` e `Agendado → NoShow` também são válidos (consultas não confirmadas explicitamente)
 - Rastreada em `estado_saga` com constantes tipadas (`EtapaSaga`, `StatusSaga`)
 
-**Eventos publicados:** `ConsultaAgendada`, `ConsultaConfirmada`, `ConsultaCancelada`, `ConsultaConcluida`, `ConsultaNoShow` → tópico `prontumed.Appointment`
+**Eventos publicados:** `ConsultaAgendadaEvent`, `ConsultaConfirmadaEvent`, `ConsultaCanceladaEvent`, `ConsultaConcluidaEvent`, `ConsultaNoShowEvent` → tópico `prontumed.Consulta`
+
+> **Nota sobre nome do tópico:** o tópico real não é `prontumed.Appointment` (documentado assim por engano em versões anteriores deste arquivo) — o Outbox usa `agregado.GetType().Name` como `tipo_agregado`, ou seja, o nome da classe do Aggregate Root (`Consulta`, em português), não o nome do serviço. Confirmado durante a implementação do Notification Service (2026-06-21). O mesmo desalinhamento provavelmente existe em Identity (`prontumed.Usuario`, não `prontumed.User`), Patient (`prontumed.Paciente`, confirmado, não `prontumed.Patient`) e Medical Record (`prontumed.Prontuario`, não `prontumed.MedicalRecord`) — ainda não corrigido na documentação desses serviços.
 
 **Bugfixes aplicados (2026-06-20) — 7 PRs mergeados:**
 
@@ -177,6 +179,42 @@ Ver `services/medical-record/README.md` para documentação completa.
 
 ---
 
+### ✅ Notification Service (`services/notification/`)
+
+Worker .NET 10 puro (sem API REST) — consome eventos Kafka do Appointment Service e dispara notificações por e-mail e push. Clean Architecture adaptada: `Domain` → `Application` → `Infrastructure` → `Worker` (substitui a camada `API`).
+
+**Eventos consumidos** (tópico `prontumed.Consulta`, filtrados pelo header Kafka `eventType`):
+- `ConsultaAgendadaEvent` → e-mail + push de confirmação ao paciente
+- `ConsultaCanceladaEvent` → e-mail + push de cancelamento ao paciente
+- `ConsultaConcluidaEvent` → push pedindo feedback ao paciente
+
+> **Escopo do MVP:** apenas o paciente é notificado (é o que os templates seedados em `infra/postgres/notifications/01-schema.sql` cobrem hoje). Notificar o médico sobre novos agendamentos é descrito em `arquitetura-software.md`, mas depende do App Mobile existir (ainda não há registro de push token de médico) — ficou fora do escopo desta primeira versão.
+
+**Enriquecimento de dados:** os eventos do Appointment só carregam IDs (`IdPaciente`, `IdMedico`). O Notification Service busca nome/e-mail via chamadas HTTP síncronas, assinadas com HMAC, a dois endpoints novos criados especificamente para uso entre serviços internos (sem JWT de usuário, já que o worker não age em nome de ninguém logado):
+- `GET /pacientes/{id}/interno` (Patient Service)
+- `GET /usuarios/{id}/interno` (Identity Service)
+
+Ambos protegidos só pelo `HmacValidationMiddleware` (`[AllowAnonymous]`), não pelas regras de RBAC das rotas equivalentes usadas pelo BFF. Decisão registrada na conversa de implementação: preferido a um read model local (réplica de dados via eventos) por ser mais simples e não exigir alterar o formato de eventos já publicados pelo Patient Service.
+
+**Resiliência:** chamadas a Patient/Identity usam retry com backoff exponencial (Polly) via `DelegatingHandler`. O consumer Kafka só comita o offset após processar com sucesso — falha temporária nos serviços internos atrasa a notificação em vez de perdê-la.
+
+**Idempotência:** `logs_envio` tem `UNIQUE(id_evento, tipo_evento, canal)` — `id_evento` é, na prática, o `id_agregado` (`IdConsulta`) usado como chave da mensagem Kafka, que se repete entre os 3 tipos de evento da mesma consulta; por isso `tipo_evento` entra na chave de idempotência.
+
+**Envio real:** e-mail via SMTP (MailKit) apontando para o container `smtp4dev` (novo no `docker-compose.yml`, UI em `http://localhost:5080`) — captura os e-mails sem entregá-los de fato, adequado para dev/demonstração. Push é um stub que só grava log + `logs_envio`, já que o App Mobile não existe ainda.
+
+**Cliente Kafka:** `Confluent.Kafka` puro (primeiro consumer do sistema — os demais serviços só produzem eventos via Outbox).
+
+**Smoke test (2026-06-21):** fluxo ponta a ponta validado manualmente — `POST /consultas` → Outbox → Debezium → Kafka → consumo → e-mail capturado no smtp4dev + push simulado, ambos com `status=Sent` em `logs_envio`.
+
+**Bugs de infraestrutura descobertos e corrigidos durante a implementação:**
+- Conectores Debezium (`infra/debezium/connectors/*.json`) tinham `transforms.outbox.table.field.event.timestamp: criado_em` apontando para uma coluna `TIMESTAMPTZ` — o Debezium nunca representa esse tipo como `INT64` (exigido pelo `EventRouter`), causando falha permanente da task do conector assim que o primeiro evento real era publicado em qualquer serviço. Campo é opcional e foi removido dos 4 conectores.
+- `logs_envio` tinha `UNIQUE(id_evento, canal)` sem `tipo_evento` — bloquearia indevidamente o registro de uma consulta cancelada se a mesma consulta já tivesse sido notificada como agendada (mesmo `id_evento`/`id_agregado`).
+- Seeds de `modelos_notificacao` usavam `tipo_evento` em inglês (`AppointmentScheduled` etc.), incompatível com o valor real publicado pelo Outbox (`evento.GetType().Name`).
+
+Ver `services/notification/README.md` para documentação completa.
+
+---
+
 ## Padrões definidos (aplicar em todos os próximos serviços)
 
 | Decisão | Escolha |
@@ -186,6 +224,7 @@ Ver `services/medical-record/README.md` para documentação completa.
 | Naming dos projetos (.csproj) | `NomeServico.Camada` |
 | Autenticação serviço ↔ BFF | HMAC-SHA256 (`X-HMAC-Signature` + `X-HMAC-Timestamp` + `X-HMAC-Nonce` via IMemoryCache) |
 | HMAC — mensagem assinada | `{Method}{Path}{QueryString}{Timestamp}` |
+| Autenticação serviço ↔ serviço (sem usuário) | Rota `/recurso/{id}/interno`, `[AllowAnonymous]` + só `HmacValidationMiddleware` — usado pelo Notification Service para chamar Patient/Identity sem JWT |
 | Autenticação usuário | Cookie HttpOnly (access 15min + refresh 7d) |
 | Runtime | .NET 10 |
 | ORM | EF Core 10 + Npgsql |
@@ -265,17 +304,21 @@ cd services/appointment/AppointmentService.API && dotnet run
 
 # Medical Record (porta 5004)
 cd services/medical-record/MedicalRecordService.API && dotnet run
+
+# Notification (worker, sem porta HTTP)
+# DOTNET_ENVIRONMENT=Development necessário para carregar appsettings.Development.json
+cd services/notification/NotificationService.Worker && DOTNET_ENVIRONMENT=Development dotnet run
 ```
 
-Acesse a documentação de cada serviço em `http://localhost:{porta}/scalar/v1`
+Acesse a documentação de cada serviço (exceto Notification, que não tem API REST) em `http://localhost:{porta}/scalar/v1`
 
 ---
 
-## Próximo serviço: Notification Service
+## Próximo serviço: BFF Gateway
 
-**Tipo:** Worker .NET 10 (sem API REST) | **Banco:** `db_notifications` | **Branch:** `feat/notification-service`
+**Tipo:** NestJS | **Porta:** `3000` | **Branch:** `feat/bff-gateway`
 
-Consome eventos Kafka (`ConsultaAgendada`, `ConsultaCancelada`, `ConsultaConcluida`) e dispara notificações via Email e Push. Ver seção "5. Notification Service" em `Arquitetura/arquitetura-software.md` para o desenho já definido.
+Único ponto de entrada para Portal Web e App Mobile. Ver seção "Camada de Entrada — BFF NestJS" em `Arquitetura/arquitetura-software.md` para o desenho já definido.
 
 ---
 
@@ -294,3 +337,4 @@ Consome eventos Kafka (`ConsultaAgendada`, `ConsultaCancelada`, `ConsultaConclui
 | Inglês nas pastas | Sub-pastas dos projetos (.NET) | Convenção padrão do ecossistema .NET |
 | Double-booking | Unique constraint parcial no banco + DbUpdateException no middleware | Atomicidade real — check em memória não é suficiente sob concorrência |
 | LGPD — Doctor | idMedico forçado pelo JWT, não pelo caller | Doctor não pode consultar dados de outros médicos |
+| Enriquecimento de dados no Notification Service | Chamada HTTP+HMAC síncrona a Patient/Identity, não read model local | Mais simples e mais rápido de implementar; não exige duplicar dados nem alterar eventos já publicados. Read model ficaria mais resiliente a indisponibilidade dos outros serviços, mas o ganho não se justifica para o MVP — decisão revisitável se o requisito mudar |

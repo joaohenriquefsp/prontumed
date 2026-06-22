@@ -130,7 +130,7 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 **Banco:** `db_appointments`  
 **Responsabilidade:** Agendamento, cancelamento, controle de agenda médica. Saga Pattern como máquina de estados interna — verificação de disponibilidade, reserva de slot e criação da consulta são atômicas dentro do mesmo serviço. A notificação é assíncrona via Outbox + Kafka.
 
-**Eventos publicados:** `ConsultaAgendada`, `ConsultaConfirmada`, `ConsultaCancelada`, `ConsultaConcluida`, `ConsultaNoShow` → tópico `prontumed.Appointment`
+**Eventos publicados:** `ConsultaAgendadaEvent`, `ConsultaConfirmadaEvent`, `ConsultaCanceladaEvent`, `ConsultaConcluidaEvent`, `ConsultaNoShowEvent` → tópico `prontumed.Consulta` (nome real do tópico = nome da classe do Aggregate Root, `Consulta`, não o nome do serviço — ver nota em `contexto-atual.md`)
 
 **Máquina de estados:** `Agendado → Confirmado → Concluido / Cancelado / NoShow`
 - `Agendado → Concluido` e `Agendado → NoShow` também são transições válidas (consultas não confirmadas explicitamente)
@@ -157,13 +157,21 @@ Cada microsserviço é um projeto .NET Core independente com banco de dados pró
 
 ### 5. Notification Service
 **Porta:** worker (sem API REST)  
-**Banco:** `db_notifications` *(apenas log de entregas)*  
-**Responsabilidade:** Worker puro. Consome eventos Kafka e dispara notificações via Email e Push.
+**Banco:** `db_notifications` *(apenas log de entregas e modelos de mensagem)*  
+**Responsabilidade:** Worker puro. Consome eventos Kafka do tópico `prontumed.Consulta` e dispara notificações via Email e Push.
 
-**Eventos consumidos:**
-- `ConsultaAgendada` → email + push de confirmação para paciente e médico
-- `ConsultaCancelada` → email + push de cancelamento
-- `ConsultaConcluida` → push solicitando feedback ao paciente
+**Eventos consumidos** (filtrados pelo header Kafka `eventType`):
+- `ConsultaAgendadaEvent` → email + push de confirmação ao paciente
+- `ConsultaCanceladaEvent` → email + push de cancelamento ao paciente
+- `ConsultaConcluidaEvent` → push solicitando feedback ao paciente
+
+> Notificar o médico (ex: push de novo agendamento) está fora do escopo da v1 — depende do App Mobile existir para haver onde registrar o push token do médico.
+
+**Enriquecimento de dados:** os eventos do Appointment só carregam IDs. O worker busca nome/e-mail do paciente e do médico via HTTP síncrono assinado com HMAC, chamando rotas dedicadas a uso interno (`GET /pacientes/{id}/interno`, `GET /usuarios/{id}/interno` — ver ADR-007) com retry via Polly. Essa decisão prioriza simplicidade sobre desacoplamento total: um read model local (réplica de dados via eventos `PacienteCadastrado`/`UsuarioCriado`) seria mais resiliente a indisponibilidade dos outros serviços, mas exigiria alterar o formato de eventos já publicados (que hoje não carregam e-mail) e adicionar dois consumers + tabelas extras — custo não justificado para o MVP.
+
+**Envio:** e-mail real via SMTP (MailKit), apontando em dev para o container `smtp4dev`. Push é um stub que registra log + `logs_envio`, sem integração real (sem App Mobile ainda não há push token para enviar de fato).
+
+**Idempotência:** Kafka entrega at-least-once. `logs_envio` tem `UNIQUE(id_evento, tipo_evento, canal)` — o consumer verifica antes de processar e o índice é a garantia final contra duplicidade.
 
 ---
 
@@ -450,6 +458,11 @@ gateway                 :3000  ← entry point único
 **Decisão:** O Saga do Appointment Service é uma máquina de estados persistida dentro do próprio serviço, não uma coordenação distribuída entre múltiplos microsserviços.  
 **Motivo:** Verificação de disponibilidade, reserva de slot e criação da consulta pertencem ao mesmo Bounded Context e são operações atômicas dentro de uma única transação SQL — não há justificativa para distribuir essa transação entre serviços distintos. A comunicação com o Notification Service (único serviço externo envolvido) é assíncrona e coberta pelo Outbox + Debezium, que já garante entrega confiável. Um Saga orquestrado cross-service adicionaria coordenação remota, endpoints de compensação e controle de idempotência sem benefício para o domínio clínico do MVP.  
 **Consequência:** A tabela `estado_saga` rastreia transições (`Agendado → Confirmado → Concluido / Cancelado / NoShow`) com compensação local (liberar slot) em caso de falha. Transições `Agendado → Concluido` e `Agendado → NoShow` também são válidas. O comportamento é correto e rastreável sem two-phase commit.
+
+### ADR-007 — Rotas `/interno` com HMAC-only para chamadas serviço-a-serviço sem usuário
+**Decisão:** Serviços que precisam ser chamados por outro serviço interno que não atua em nome de um usuário logado (caso do Notification Service, um worker) expõem uma rota adicional `GET /recurso/{id}/interno`, marcada `[AllowAnonymous]` mas ainda protegida pelo `HmacValidationMiddleware`. A rota equivalente usada pelo BFF (`GET /recurso/{id}`) continua exigindo JWT + RBAC normalmente.  
+**Motivo:** o modelo de autenticação do sistema tem duas camadas com propósitos distintos — HMAC autentica "este caller é um serviço interno confiável" (Zero Trust), JWT autentica "em nome de qual usuário". Um worker como o Notification Service não tem usuário associado, então exigir JWT nessas chamadas forçaria um conceito que não se aplica. A alternativa considerada — um token de serviço (client credentials) emitido pelo Identity — recriaria com mais peças exatamente a garantia que o HMAC já fornece, sem benefício adicional para o MVP.  
+**Consequência:** as rotas `/interno` ficam acessíveis a qualquer caller que tenha a chave HMAC compartilhada — hoje o mesmo nível de confiança que o BFF já tem sobre os serviços internos. Implementado em `GET /usuarios/{id}/interno` (Identity) e `GET /pacientes/{id}/interno` (Patient); não exposto pelo BFF.
 
 ---
 
