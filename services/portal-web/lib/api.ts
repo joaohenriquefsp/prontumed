@@ -24,7 +24,7 @@ export async function bff<T = unknown>(
 ): Promise<T> {
   // Mock mode: retorna dados locais sem chamar o BFF
   if (MOCK_MODE) {
-    const mock = getMockResponse(path);
+    const mock = getMockResponse(path, init);
     if (mock !== null) return mock as T;
   }
 
