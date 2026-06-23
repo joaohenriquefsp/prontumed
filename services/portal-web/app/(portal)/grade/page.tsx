@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Clock, Calendar } from "lucide-react";
 import { bff } from "@/lib/api";
+import { toast } from "@/lib/toast-store";
 import type { GradeHorarioDto, CriarGradeHorarioPayload, UsuarioDto } from "@/lib/types";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -50,23 +51,28 @@ export default function GradePage() {
       .finally(() => setLoading(false));
   }, [idMedico]);
 
-  function handleExcluir(id: string) {
-    setGrade(prev => prev.filter(g => g.id !== id));
+  async function handleExcluir(id: string) {
+    try {
+      await bff(`/grade-horarios/${id}`, { method: "DELETE" });
+      setGrade(prev => prev.filter(g => g.id !== id));
+      toast({ title: "Horário removido", variant: "success" });
+    } catch {
+      toast({ title: "Erro ao remover horário", variant: "error" });
+    }
   }
 
-  function handleCriar(payload: CriarGradeHorarioPayload) {
-    const nova: GradeHorarioDto = {
-      id: `mock-${Date.now()}`,
-      idMedico: payload.idMedico,
-      diaSemana: payload.diaSemana,
-      horarioInicio: payload.horaInicio,
-      horarioFim: payload.horaFim,
-      duracaoSlotMinutos: payload.duracaoMinutos,
-      ativo: true,
-      criadoEm: new Date().toISOString(),
-    };
-    setGrade(prev => [...prev, nova]);
-    setShowModal(false);
+  async function handleCriar(payload: CriarGradeHorarioPayload) {
+    try {
+      const nova = await bff<GradeHorarioDto>("/grade-horarios", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setGrade(prev => [...prev, nova]);
+      setShowModal(false);
+      toast({ title: "Horário adicionado", variant: "success" });
+    } catch {
+      toast({ title: "Erro ao criar horário", variant: "error" });
+    }
   }
 
   const medicoSelecionado = medicos.find(m => m.id === idMedico);
@@ -177,7 +183,7 @@ export default function GradePage() {
                   ) : (
                     <div className="divide-y divide-pm-line">
                       {faixas.map(f => (
-                        <FaixaRow key={f.id} faixa={f} onExcluir={handleExcluir} />
+                        <FaixaRow key={f.id} faixa={f} onExcluir={() => void handleExcluir(f.id)} />
                       ))}
                     </div>
                   )}
@@ -199,7 +205,7 @@ export default function GradePage() {
                   </div>
                   <div className="divide-y divide-pm-line">
                     {faixas.map(f => (
-                      <FaixaRow key={f.id} faixa={f} onExcluir={handleExcluir} />
+                      <FaixaRow key={f.id} faixa={f} onExcluir={() => void handleExcluir(f.id)} />
                     ))}
                   </div>
                 </div>
@@ -261,7 +267,7 @@ function NovoHorarioModal({
   medicos: UsuarioDto[];
   idMedicoInicial: string;
   onClose: () => void;
-  onSalvar: (p: CriarGradeHorarioPayload) => void;
+  onSalvar: (p: CriarGradeHorarioPayload) => Promise<void>;
 }) {
   const [idMedico,   setIdMedico]   = useState(idMedicoInicial);
   const [diaSemana,  setDiaSemana]  = useState(1);
@@ -277,7 +283,7 @@ function NovoHorarioModal({
     const [hF, mF] = horaFim.split(":").map(Number);
     if (hF * 60 + mF <= hI * 60 + mI) { setErro("Horário de fim deve ser após o início."); return; }
     if (duracao < 10) { setErro("Duração mínima é 10 minutos."); return; }
-    onSalvar({ idMedico, diaSemana, horaInicio, horaFim, duracaoMinutos: duracao });
+    void onSalvar({ idMedico, diaSemana, horaInicio, horaFim, duracaoMinutos: duracao });
   }
 
   return (
