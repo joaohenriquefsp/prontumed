@@ -63,6 +63,93 @@ export interface SlotDisponivel {
   disponivel: boolean;
 }
 
+// ── Consulta list (BFF enriquece com nomes para a listagem) ─────────────────
+
+export interface ConsultaListItem extends ConsultaResumoDto {
+  nomePaciente: string;
+  nomeMedico: string;
+  motivoCancelamento?: string;
+  observacoes?: string;
+}
+
+export interface ConsultaListResponseEnriquecida {
+  itens: ConsultaListItem[];
+  total: number;
+}
+
+// ── Consulta enriquecida (BFF compõe paciente + médico) ─────────────────────
+
+export interface ConsultaDetalheDto {
+  id: string;
+  paciente: { id: string; nomeCompleto: string };
+  medico: { id: string; nomeCompleto: string };
+  agendadoPara: string;
+  duracaoMinutos: number;
+  status: StatusConsulta;
+  observacoes?: string;
+}
+
+// ── Usuários — payload de criação ────────────────────────────────────────────
+
+export interface CriarUsuarioPayload {
+  primeiroNome: string;
+  sobrenome: string;
+  email: string;
+  senha: string;
+  perfil: Perfil;
+}
+
+// ── Grade de horários ─────────────────────────────────────────────────────────
+
+export interface GradeHorarioDto {
+  id: string;
+  idMedico: string;
+  diaSemana: number;         // 0=dom … 6=sáb
+  horarioInicio: string;     // "HH:mm"
+  horarioFim: string;        // "HH:mm"
+  duracaoSlotMinutos: number;
+  ativo: boolean;
+  criadoEm: string;
+}
+
+export interface CriarGradeHorarioPayload {
+  idMedico: string;
+  diaSemana: number;
+  horaInicio: string;        // "HH:mm"
+  horaFim: string;           // "HH:mm"
+  duracaoMinutos: number;
+}
+
+// ── Prontuários (Event Sourcing) ──────────────────────────────────────────────
+
+export type TipoEntrada = 'NotaConsulta' | 'Diagnostico' | 'Prescricao' | 'SolicitacaoExame';
+
+export interface EntradaProntuarioDto {
+  id: string;
+  tipo: TipoEntrada;
+  conteudo: string;
+  ocorreuEm: string;   // ISO 8601
+}
+
+export interface ProntuarioDto {
+  idPaciente: string;
+  versao: number;
+  entradas: EntradaProntuarioDto[];
+}
+
+export interface AdicionarEntradaPayload {
+  tipo: TipoEntrada;
+  conteudo: string;
+}
+
+export interface HistoricoEventoDto {
+  id: string;
+  tipoEvento: string;
+  versao: number;
+  payload: Record<string, unknown>;
+  ocorreuEm: string;
+}
+
 // ── SSE ───────────────────────────────────────────────────────────────────────
 
 export type TipoEventoSSE =

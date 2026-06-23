@@ -16,11 +16,13 @@ const navByRole: Record<string, NavItem[]> = {
     { href: "/agenda",      label: "Agenda de Hoje",     icon: CalendarDays },
     { href: "/proximas",    label: "Próximas Consultas", icon: Clock },
     { href: "/prontuarios", label: "Prontuários",        icon: FileText },
+    { href: "/perfil",      label: "Meu Perfil",         icon: User },
   ],
   Receptionist: [
     { href: "/pacientes",   label: "Pacientes",          icon: Users },
     { href: "/agendar",     label: "Agendar Consulta",   icon: UserPlus },
     { href: "/consultas",   label: "Consultas",          icon: CalendarDays },
+    { href: "/perfil",      label: "Meu Perfil",         icon: User },
   ],
   Admin: [
     { href: "/agenda",      label: "Agenda de Hoje",     icon: CalendarDays },
