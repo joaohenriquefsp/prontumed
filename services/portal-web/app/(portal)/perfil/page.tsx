@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Mail, Shield, CheckCircle2, Eye, EyeOff, Lock, Edit3 } from "lucide-react";
 import { useUser } from "@/components/providers/user-provider";
+import { bff } from "@/lib/api";
+import { toast } from "@/lib/toast-store";
 
 const perfilLabel: Record<string, string> = {
   Doctor:       "Médico",
@@ -39,13 +41,24 @@ export default function PerfilPage() {
     setEditMode(true);
   }
 
-  function handleSave() {
-    setSaveSuccess(true);
-    setEditMode(false);
-    setTimeout(() => setSaveSuccess(false), 3000);
+  async function handleSave() {
+    if (!user) return;
+    try {
+      await bff(`/usuarios/${user.id}/perfil`, {
+        method: "PATCH",
+        body: JSON.stringify({ primeiroNome, sobrenome }),
+      });
+      setSaveSuccess(true);
+      setEditMode(false);
+      toast({ title: "Perfil atualizado", variant: "success" });
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao salvar perfil.";
+      toast({ title: msg, variant: "error" });
+    }
   }
 
-  function handleAlterarSenha() {
+  async function handleAlterarSenha() {
     setSenhaError("");
     if (!senhaAtual || !novaSenha || !confirmaSenha) {
       setSenhaError("Preencha todos os campos.");
@@ -55,13 +68,23 @@ export default function PerfilPage() {
       setSenhaError("Nova senha e confirmação não coincidem.");
       return;
     }
-    if (novaSenha.length < 8) {
-      setSenhaError("A nova senha deve ter pelo menos 8 caracteres.");
+    if (novaSenha.length < 6) {
+      setSenhaError("A nova senha deve ter pelo menos 6 caracteres.");
       return;
     }
-    setSenhaAtual(""); setNovaSenha(""); setConfirmaSenha("");
-    setSenhaSuccess(true);
-    setTimeout(() => setSenhaSuccess(false), 3000);
+    try {
+      await bff("/auth/alterar-senha", {
+        method: "POST",
+        body: JSON.stringify({ senhaAtual, novaSenha }),
+      });
+      setSenhaAtual(""); setNovaSenha(""); setConfirmaSenha("");
+      setSenhaSuccess(true);
+      toast({ title: "Senha alterada com sucesso", variant: "success" });
+      setTimeout(() => setSenhaSuccess(false), 3000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao alterar senha.";
+      setSenhaError(msg);
+    }
   }
 
   if (loading) {
@@ -234,7 +257,7 @@ export default function PerfilPage() {
                     Cancelar
                   </button>
                   <button
-                    onClick={handleSave}
+                    onClick={() => void handleSave()}
                     className="px-4 py-2 text-[13px] text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
                     style={{ backgroundColor: "var(--pm-green)" }}
                   >
@@ -330,7 +353,7 @@ export default function PerfilPage() {
 
               <div className="flex justify-end pt-1">
                 <button
-                  onClick={handleAlterarSenha}
+                  onClick={() => void handleAlterarSenha()}
                   className="px-4 py-2 text-[13px] text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: "var(--pm-green)" }}
                 >

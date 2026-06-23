@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import { Search, UserPlus, ChevronRight, CheckCircle2, XCircle, Clock, CalendarDays, Filter } from "lucide-react";
 import Link from "next/link";
 import { bff } from "@/lib/api";
+import { toast } from "@/lib/toast-store";
+import { useUser } from "@/components/providers/user-provider";
 import { StatusBadge } from "@/components/shared/status-badge";
 import type { ConsultaListItem, ConsultaListResponseEnriquecida, StatusConsulta } from "@/lib/types";
 
@@ -40,10 +42,12 @@ const FILTROS: { label: string; value: StatusConsulta | "Todos" }[] = [
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function ConsultasPage() {
+  const { user }                    = useUser();
   const [consultas, setConsultas]   = useState<ConsultaListItem[]>([]);
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState("");
   const [filtro, setFiltro]         = useState<StatusConsulta | "Todos">("Todos");
+  const [processando, setProcessando] = useState<string | null>(null); // id em ação
 
   useEffect(() => {
     bff<ConsultaListResponseEnriquecida>("/consultas")
@@ -52,12 +56,32 @@ export default function ConsultasPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Ações mock — atualizam estado local
-  function confirmar(id: string) {
-    setConsultas(prev => prev.map(c => c.id === id ? { ...c, status: "Confirmado" as StatusConsulta } : c));
+  async function confirmar(id: string) {
+    if (processando) return;
+    setProcessando(id);
+    try {
+      await bff(`/consultas/${id}/confirmar`, { method: "PATCH" });
+      setConsultas(prev => prev.map(c => c.id === id ? { ...c, status: "Confirmado" as StatusConsulta } : c));
+      toast({ title: "Consulta confirmada", variant: "success" });
+    } catch {
+      toast({ title: "Erro ao confirmar consulta", variant: "error" });
+    } finally {
+      setProcessando(null);
+    }
   }
-  function cancelar(id: string) {
-    setConsultas(prev => prev.map(c => c.id === id ? { ...c, status: "Cancelado" as StatusConsulta } : c));
+
+  async function cancelar(id: string) {
+    if (processando) return;
+    setProcessando(id);
+    try {
+      await bff(`/consultas/${id}/cancelar`, { method: "PATCH", body: JSON.stringify({ motivo: "" }) });
+      setConsultas(prev => prev.map(c => c.id === id ? { ...c, status: "Cancelado" as StatusConsulta } : c));
+      toast({ title: "Consulta cancelada", variant: "warning" });
+    } catch {
+      toast({ title: "Erro ao cancelar consulta", variant: "error" });
+    } finally {
+      setProcessando(null);
+    }
   }
 
   const filtradas = useMemo(() => {
@@ -182,7 +206,14 @@ export default function ConsultasPage() {
           ) : (
             <div className="divide-y divide-pm-line">
               {filtradas.map(c => (
-                <ConsultaRow key={c.id} consulta={c} onConfirmar={confirmar} onCancelar={cancelar} />
+                <ConsultaRow
+                  key={c.id}
+                  consulta={c}
+                  onConfirmar={confirmar}
+                  onCancelar={cancelar}
+                  processando={processando === c.id}
+                  podeAgir={user?.perfil === "Receptionist" || user?.perfil === "Admin"}
+                />
               ))}
             </div>
           )}
@@ -206,10 +237,14 @@ function ConsultaRow({
   consulta: c,
   onConfirmar,
   onCancelar,
+  processando,
+  podeAgir,
 }: {
   consulta: ConsultaListItem;
-  onConfirmar: (id: string) => void;
-  onCancelar:  (id: string) => void;
+  onConfirmar: (id: string) => Promise<void>;
+  onCancelar:  (id: string) => Promise<void>;
+  processando: boolean;
+  podeAgir: boolean;
 }) {
   const { data, hora } = formatDataHora(c.agendadoPara);
 
@@ -244,18 +279,20 @@ function ConsultaRow({
 
       {/* Ações */}
       <div className="flex items-center gap-1.5">
-        {c.status === "Agendado" && (
+        {podeAgir && c.status === "Agendado" && (
           <button
-            onClick={() => onConfirmar(c.id)}
-            className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+            onClick={() => void onConfirmar(c.id)}
+            disabled={processando}
+            className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors disabled:opacity-50"
           >
-            Confirmar
+            {processando ? "..." : "Confirmar"}
           </button>
         )}
-        {(c.status === "Agendado" || c.status === "Confirmado") && (
+        {podeAgir && (c.status === "Agendado" || c.status === "Confirmado") && (
           <button
-            onClick={() => onCancelar(c.id)}
-            className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors"
+            onClick={() => void onCancelar(c.id)}
+            disabled={processando}
+            className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>

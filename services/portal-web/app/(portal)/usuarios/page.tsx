@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Search, UserPlus, X, Eye, EyeOff, CheckCircle2, Users, Shield, ChevronRight } from "lucide-react";
 import { bff } from "@/lib/api";
+import { toast } from "@/lib/toast-store";
 import type { UsuarioDto, CriarUsuarioPayload, Perfil } from "@/lib/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -42,21 +43,29 @@ export default function UsuariosPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  function handleDesativar(id: string) {
-    setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ativo: false } : u));
+  async function handleDesativar(id: string) {
+    try {
+      await bff(`/usuarios/${id}/desativar`, { method: "PATCH" });
+      setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ativo: false } : u));
+      toast({ title: "Usuário desativado", variant: "warning" });
+    } catch {
+      toast({ title: "Erro ao desativar usuário", variant: "error" });
+    }
   }
 
-  function handleCriar(payload: CriarUsuarioPayload) {
-    const novo: UsuarioDto = {
-      id: `mock-${Date.now()}`,
-      email: payload.email,
-      primeiroNome: payload.primeiroNome,
-      sobrenome: payload.sobrenome,
-      perfil: payload.perfil,
-      ativo: true,
-    };
-    setUsuarios(prev => [novo, ...prev]);
-    setShowModal(false);
+  async function handleCriar(payload: CriarUsuarioPayload) {
+    try {
+      const novo = await bff<UsuarioDto>("/usuarios", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setUsuarios(prev => [novo, ...prev]);
+      setShowModal(false);
+      toast({ title: "Usuário criado com sucesso", variant: "success" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao criar usuário.";
+      toast({ title: msg, variant: "error" });
+    }
   }
 
   const filtrados = useMemo(() => {
@@ -155,7 +164,7 @@ export default function UsuariosPage() {
           ) : (
             <div className="divide-y divide-pm-line">
               {filtrados.map(u => (
-                <UsuarioRow key={u.id} usuario={u} onDesativar={handleDesativar} />
+                <UsuarioRow key={u.id} usuario={u} onDesativar={() => void handleDesativar(u.id)} />
               ))}
             </div>
           )}
@@ -172,7 +181,7 @@ export default function UsuariosPage() {
 
       {/* Modal — Novo Usuário */}
       {showModal && (
-        <NovoUsuarioModal onClose={() => setShowModal(false)} onSalvar={handleCriar} />
+        <NovoUsuarioModal onClose={() => setShowModal(false)} onSalvar={(p) => void handleCriar(p)} />
       )}
     </div>
   );
