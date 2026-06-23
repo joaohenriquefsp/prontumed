@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-23 (Portal Web — telas iniciais implementadas)
+> Última atualização: 2026-06-23 (Portal Web — todas as telas implementadas em mock mode)
 
 ---
 
@@ -22,7 +22,7 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Notification Service | Worker .NET 10 | — | ✅ Concluído (smoke test ponta a ponta) |
 | bff-web | NestJS | 3000 | ✅ Concluído (Redis + Kafka + SSE) |
 | bff-mobile | NestJS | 3001 | ✅ Concluído (Redis + Kafka + SSE) |
-| Portal Web | Next.js 14 | 3002 | 🔧 **Em andamento** |
+| Portal Web | Next.js 14 | 3002 | ✅ Concluído (todas as telas — mock mode) |
 | App Mobile | React Native + Expo | — | ⏳ |
 
 ---
@@ -316,25 +316,25 @@ Acesse a documentação de cada serviço (exceto Notification, que não tem API 
 
 ---
 
-### 🔧 Portal Web (`services/portal-web/`) — em andamento
+### ✅ Portal Web (`services/portal-web/`) — completo em mock mode
 
 Frontend web do sistema. Next.js 14 App Router, TypeScript, Tailwind CSS puro com design system via CSS custom properties (`--pm-*`). Porta 3002 em dev.
 
-**Telas implementadas:**
+**Todas as 11 telas implementadas em mock mode** — prontas para substituir as chamadas `bff()` por respostas reais assim que os BFFs estiverem rodando.
 
-| Rota | Tela | Status |
-|---|---|---|
-| `/login` | Login | ✅ Completo |
-| `/agenda` | Agenda de Hoje (timeline) | ✅ Completo |
-| `/pacientes` | Lista de Pacientes | ✅ Completo |
-| `/agendar` | Agendar Consulta (wizard 4 passos) | ✅ Completo |
-| `/configuracoes` | Tema de cor + preset de sidebar | ✅ Completo |
-| `/consultas` | Consultas | ⏳ Placeholder |
-| `/usuarios` | Usuários | ⏳ Placeholder |
-| `/grade` | Grade Horária | ⏳ Placeholder |
-| `/proximas` | Próximas Consultas | ⏳ Placeholder |
-| `/prontuarios` | Prontuários | ⏳ Placeholder |
-| `/perfil` | Meu Perfil | ⏳ Placeholder |
+| Rota | Tela | Roles | Status |
+|---|---|---|---|
+| `/login` | Login | — | ✅ Completo |
+| `/agenda` | Agenda de Hoje (timeline) | Doctor, Admin | ✅ Completo |
+| `/pacientes` | Lista de Pacientes | Receptionist, Admin | ✅ Completo |
+| `/agendar` | Agendar Consulta (wizard 4 passos) | Receptionist, Admin | ✅ Completo |
+| `/configuracoes` | Tema de cor + preset de sidebar | todos | ✅ Completo |
+| `/consultas` | Consultas (tabela + filtros por status + ações) | Receptionist, Admin | ✅ Completo |
+| `/proximas` | Próximas Consultas (agrupadas por dia) | Doctor | ✅ Completo |
+| `/perfil` | Meu Perfil (editar nome + alterar senha) | todos | ✅ Completo |
+| `/usuarios` | Gestão de Usuários (CRUD + modal criar) | Admin | ✅ Completo |
+| `/grade` | Grade Horária (faixas por dia da semana) | Admin, Doctor | ✅ Completo |
+| `/prontuarios` | Prontuários (event sourcing — lista + entradas) | Doctor | ✅ Completo |
 
 **Decisões de implementação:**
 - Design system com 6 paletas de cor e 3 presets de sidebar, todos trocáveis em tempo real via CSS custom properties (sem rebuild)
