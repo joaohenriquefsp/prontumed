@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-22 (Redis + Kafka consumer + SSE nos BFFs)
+> Última atualização: 2026-06-23 (Portal Web — telas iniciais implementadas)
 
 ---
 
@@ -22,7 +22,7 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Notification Service | Worker .NET 10 | — | ✅ Concluído (smoke test ponta a ponta) |
 | bff-web | NestJS | 3000 | ✅ Concluído (Redis + Kafka + SSE) |
 | bff-mobile | NestJS | 3001 | ✅ Concluído (Redis + Kafka + SSE) |
-| Portal Web | Next.js 14 | — | ⏳ **Próximo** |
+| Portal Web | Next.js 14 | 3002 | 🔧 **Em andamento** |
 | App Mobile | React Native + Expo | — | ⏳ |
 
 ---
@@ -313,6 +313,43 @@ cd services/notification/NotificationService.Worker && DOTNET_ENVIRONMENT=Develo
 ```
 
 Acesse a documentação de cada serviço (exceto Notification, que não tem API REST) em `http://localhost:{porta}/scalar/v1`
+
+---
+
+### 🔧 Portal Web (`services/portal-web/`) — em andamento
+
+Frontend web do sistema. Next.js 14 App Router, TypeScript, Tailwind CSS puro com design system via CSS custom properties (`--pm-*`). Porta 3002 em dev.
+
+**Telas implementadas:**
+
+| Rota | Tela | Status |
+|---|---|---|
+| `/login` | Login | ✅ Completo |
+| `/agenda` | Agenda de Hoje (timeline) | ✅ Completo |
+| `/pacientes` | Lista de Pacientes | ✅ Completo |
+| `/agendar` | Agendar Consulta (wizard 4 passos) | ✅ Completo |
+| `/configuracoes` | Tema de cor + preset de sidebar | ✅ Completo |
+| `/consultas` | Consultas | ⏳ Placeholder |
+| `/usuarios` | Usuários | ⏳ Placeholder |
+| `/grade` | Grade Horária | ⏳ Placeholder |
+| `/proximas` | Próximas Consultas | ⏳ Placeholder |
+| `/prontuarios` | Prontuários | ⏳ Placeholder |
+| `/perfil` | Meu Perfil | ⏳ Placeholder |
+
+**Decisões de implementação:**
+- Design system com 6 paletas de cor e 3 presets de sidebar, todos trocáveis em tempo real via CSS custom properties (sem rebuild)
+- `lib/api.ts` — wrapper de fetch com cookie HttpOnly (`credentials: include`) e lógica de refresh automático em 401
+- `UserProvider` — carrega `GET /usuarios/me` no mount e expõe o usuário logado via context (necessário porque o JWT está em cookie HttpOnly inacessível ao JS)
+- Mock mode (`MOCK_AUTH=true` + `NEXT_PUBLIC_MOCK_AUTH=true` no `.env.local`) — bypass de middleware + dados fictícios sem backend rodando; desativar para produção
+- Perfil mock padrão: Admin (Carlos Mendes) — vê todas as rotas do menu
+
+**Como rodar:**
+```bash
+cd services/portal-web
+pnpm dev   # http://localhost:3002
+```
+
+Ver `services/portal-web/README.md` para documentação completa.
 
 ---
 

@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Shadcn/Tailwind tokens */
+    --background: 60 9% 99%;
+    --foreground: 220 26% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 26% 7%;
+    --primary: 171 71% 46%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 26% 7%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 171 71% 46%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 171 71% 46%;
+    --radius: 0.75rem;
+
+    /* Tema dinâmico — sobrescrito pelo ThemeProvider via JS */
+    --pm-green: #22C7A8;
+    --pm-green-hover: #1AAF93;
+    --pm-green-soft: #F0FDF9;
+    --pm-green-subtle: rgba(34,199,168,0.08);
+
+    /* Sidebar — sobrescrito pelo ThemeProvider via JS */
+    --pm-sidebar-bg: #FFFFFF;
+    --pm-sidebar-border: #EBEBEB;
+    --pm-sidebar-text: #0D1117;
+    --pm-sidebar-muted: #6B7280;
+    --pm-sidebar-faint: #9CA3AF;
+    --pm-sidebar-surface: #F6F7F8;
+    --pm-sidebar-line: #EBEBEB;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer utilities {
+  .font-mono-data {
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
