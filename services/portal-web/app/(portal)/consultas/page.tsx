@@ -84,6 +84,34 @@ export default function ConsultasPage() {
     }
   }
 
+  async function concluir(id: string) {
+    if (processando) return;
+    setProcessando(id);
+    try {
+      await bff(`/consultas/${id}/concluir`, { method: "PATCH" });
+      setConsultas(prev => prev.map(c => c.id === id ? { ...c, status: "Concluido" as StatusConsulta } : c));
+      toast({ title: "Consulta concluída", variant: "success" });
+    } catch {
+      toast({ title: "Erro ao concluir consulta", variant: "error" });
+    } finally {
+      setProcessando(null);
+    }
+  }
+
+  async function noShow(id: string) {
+    if (processando) return;
+    setProcessando(id);
+    try {
+      await bff(`/consultas/${id}/no-show`, { method: "PATCH" });
+      setConsultas(prev => prev.map(c => c.id === id ? { ...c, status: "NoShow" as StatusConsulta } : c));
+      toast({ title: "Paciente marcado como não compareceu", variant: "warning" });
+    } catch {
+      toast({ title: "Erro ao registrar no-show", variant: "error" });
+    } finally {
+      setProcessando(null);
+    }
+  }
+
   const filtradas = useMemo(() => {
     let lista = consultas;
     if (filtro !== "Todos") lista = lista.filter(c => c.status === filtro);
@@ -211,8 +239,10 @@ export default function ConsultasPage() {
                   consulta={c}
                   onConfirmar={confirmar}
                   onCancelar={cancelar}
+                  onConcluir={concluir}
+                  onNoShow={noShow}
                   processando={processando === c.id}
-                  podeAgir={user?.perfil === "Receptionist" || user?.perfil === "Admin"}
+                  perfil={user?.perfil}
                 />
               ))}
             </div>
@@ -237,15 +267,22 @@ function ConsultaRow({
   consulta: c,
   onConfirmar,
   onCancelar,
+  onConcluir,
+  onNoShow,
   processando,
-  podeAgir,
+  perfil,
 }: {
   consulta: ConsultaListItem;
   onConfirmar: (id: string) => Promise<void>;
   onCancelar:  (id: string) => Promise<void>;
+  onConcluir:  (id: string) => Promise<void>;
+  onNoShow:    (id: string) => Promise<void>;
   processando: boolean;
-  podeAgir: boolean;
+  perfil?: string;
 }) {
+  const podeAgir         = perfil === "Receptionist" || perfil === "Admin";
+  const eMedico          = perfil === "Doctor";
+  const podeNoShow       = eMedico || perfil === "Admin";
   const { data, hora } = formatDataHora(c.agendadoPara);
 
   return (
@@ -278,7 +315,7 @@ function ConsultaRow({
       <StatusBadge status={toStatusBadge(c.status)} />
 
       {/* Ações */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
         {podeAgir && c.status === "Agendado" && (
           <button
             onClick={() => void onConfirmar(c.id)}
@@ -295,6 +332,24 @@ function ConsultaRow({
             className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors disabled:opacity-50"
           >
             Cancelar
+          </button>
+        )}
+        {eMedico && c.status === "Confirmado" && (
+          <button
+            onClick={() => void onConcluir(c.id)}
+            disabled={processando}
+            className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 transition-colors disabled:opacity-50"
+          >
+            Concluir
+          </button>
+        )}
+        {podeNoShow && (c.status === "Agendado" || c.status === "Confirmado") && (
+          <button
+            onClick={() => void onNoShow(c.id)}
+            disabled={processando}
+            className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors disabled:opacity-50"
+          >
+            Não veio
           </button>
         )}
         {(c.status === "Concluido" || c.status === "Cancelado" || c.status === "NoShow") && (

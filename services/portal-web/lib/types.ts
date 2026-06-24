@@ -13,6 +13,19 @@ export interface UsuarioDto {
 
 // ── Pacientes ─────────────────────────────────────────────────────────────────
 
+export interface CriarPacientePayload {
+  primeiroNome: string;
+  sobrenome: string;
+  cpf: string;          // 11 dígitos numéricos
+  dataNascimento: string; // YYYY-MM-DD
+  telefone: string;
+  email: string;
+  logradouro: string;
+  cidade: string;
+  uf: string;           // 2 chars
+  cep: string;          // 8 dígitos numéricos
+}
+
 export interface PacienteResumoDto {
   id: string;
   primeiroNome: string;
