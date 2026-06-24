@@ -29,10 +29,25 @@ export class AppointmentsService {
   }
 
   async listarConsultas(query: string, req: Request): Promise<unknown> {
+    const params = new URLSearchParams(query);
+    const idMedico = params.get('idMedico');
+    const cacheKey = idMedico ? `consultas:medico:${idMedico}` : null;
+
+    if (cacheKey) {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) return cached;
+    }
+
     const path = '/consultas';
     const qs = query ? `?${query}` : '';
     const headers = { ...this.hmac.gerarHeaders('GET', path, qs ? query : ''), cookie: this.cookieHeader(req) };
-    return this.get(`${this.appointmentUrl}${path}${qs}`, headers);
+    const data = await this.get(`${this.appointmentUrl}${path}${qs}`, headers);
+
+    if (cacheKey && data !== undefined) {
+      await this.redis.set(cacheKey, data, TTL_CONSULTA);
+    }
+
+    return data;
   }
 
   async obterConsulta(id: string, req: Request): Promise<unknown> {
