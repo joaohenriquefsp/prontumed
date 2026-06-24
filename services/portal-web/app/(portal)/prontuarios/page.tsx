@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Search, Plus, FileText, Stethoscope, Pill, FlaskConical, ChevronDown, ChevronUp, X, AlertCircle } from "lucide-react";
 import { bff } from "@/lib/api";
+import { toast } from "@/lib/toast-store";
 import type { PacienteResumoDto, ProntuarioDto, EntradaProntuarioDto, TipoEntrada, AdicionarEntradaPayload } from "@/lib/types";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -58,18 +59,21 @@ export default function ProntuariosPage() {
       .finally(() => setLoadingPro(false));
   }, [pacSel]);
 
-  function handleAdicionarEntrada(payload: AdicionarEntradaPayload) {
+  async function handleAdicionarEntrada(payload: AdicionarEntradaPayload) {
     if (!prontuario || !pacSel) return;
-    const nova: EntradaProntuarioDto = {
-      id: `mock-${Date.now()}`,
-      tipo: payload.tipo,
-      conteudo: payload.conteudo,
-      ocorreuEm: new Date().toISOString(),
-    };
-    setProntuario(prev =>
-      prev ? { ...prev, versao: prev.versao + 1, entradas: [nova, ...prev.entradas] } : prev
-    );
-    setShowModal(false);
+    try {
+      const nova = await bff<EntradaProntuarioDto>(
+        `/prontuarios/${pacSel.id}/entradas`,
+        { method: "POST", body: JSON.stringify(payload) },
+      );
+      setProntuario(prev =>
+        prev ? { ...prev, versao: prev.versao + 1, entradas: [nova, ...prev.entradas] } : prev
+      );
+      setShowModal(false);
+      toast({ title: "Entrada adicionada ao prontuário", variant: "success" });
+    } catch {
+      toast({ title: "Erro ao adicionar entrada", variant: "error" });
+    }
   }
 
   const pacientesFiltrados = buscaPac.trim()
@@ -242,7 +246,7 @@ export default function ProntuariosPage() {
       {showModal && pacSel && (
         <AdicionarEntradaModal
           onClose={() => setShowModal(false)}
-          onSalvar={handleAdicionarEntrada}
+          onSalvar={(p) => void handleAdicionarEntrada(p)}
         />
       )}
     </div>
