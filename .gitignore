@@ -17,7 +17,11 @@
 
 # Logs
 **/*.log
+**/*.txt
 **/logs/
+
+# npm lock (projeto usa pnpm)
+**/package-lock.json
 
 # OS
 .DS_Store
