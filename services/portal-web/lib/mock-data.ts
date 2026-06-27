@@ -271,20 +271,19 @@ export const MOCK_CONSULTAS_LISTA: ConsultaListItem[] = [
 // ── Slots de disponibilidade ──────────────────────────────────────────────────
 
 export const MOCK_SLOTS: SlotDisponivel[] = [
-  { horario: "08:00", disponivel: false },
-  { horario: "08:30", disponivel: true },
-  { horario: "09:00", disponivel: false },
-  { horario: "09:30", disponivel: true },
-  { horario: "10:00", disponivel: true },
-  { horario: "10:30", disponivel: true },
-  { horario: "11:00", disponivel: false },
-  { horario: "11:30", disponivel: true },
-  { horario: "14:00", disponivel: true },
-  { horario: "14:30", disponivel: true },
-  { horario: "15:00", disponivel: false },
-  { horario: "15:30", disponivel: true },
-  { horario: "16:00", disponivel: true },
-  { horario: "16:30", disponivel: true },
+  { inicio: "2026-06-24T08:00:00Z", fim: "2026-06-24T08:30:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T08:30:00Z", fim: "2026-06-24T09:00:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T09:00:00Z", fim: "2026-06-24T09:30:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T09:30:00Z", fim: "2026-06-24T10:00:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T10:00:00Z", fim: "2026-06-24T10:30:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T10:30:00Z", fim: "2026-06-24T11:00:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T11:00:00Z", fim: "2026-06-24T11:30:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T14:00:00Z", fim: "2026-06-24T14:30:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T14:30:00Z", fim: "2026-06-24T15:00:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T15:00:00Z", fim: "2026-06-24T15:30:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T15:30:00Z", fim: "2026-06-24T16:00:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T16:00:00Z", fim: "2026-06-24T16:30:00Z", duracaoMinutos: 30 },
+  { inicio: "2026-06-24T16:30:00Z", fim: "2026-06-24T17:00:00Z", duracaoMinutos: 30 },
 ];
 
 // ── Próximas consultas (enriquecidas com nomes) ───────────────────────────────
@@ -426,7 +425,7 @@ export const MOCK_PRONTUARIOS: Record<string, ProntuarioDto> = {
       },
       {
         id: "e0000011",
-        tipo: "SolicitacaoExame",
+        tipo: "Exame",
         conteudo: "Solicitar: hemograma completo, perfil lipídico, glicemia em jejum, TSH. Retornar em 30 dias com resultados.",
         ocorreuEm: "2026-06-10T09:20:00",
       },
