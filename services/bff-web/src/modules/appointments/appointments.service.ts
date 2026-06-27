@@ -11,9 +11,14 @@ import { CriarGradeHorarioDto } from './dto/criar-grade-horario.dto';
 
 const TTL_CONSULTA = 60;
 
+type ConsultaRaw = { id: string; idPaciente: string; idMedico: string; [k: string]: unknown };
+type NomeDto    = { primeiroNome: string; sobrenome: string };
+
 @Injectable()
 export class AppointmentsService {
   private readonly appointmentUrl: string;
+  private readonly patientUrl: string;
+  private readonly identityUrl: string;
 
   constructor(
     private readonly http: HttpService,
@@ -22,6 +27,8 @@ export class AppointmentsService {
     private readonly redis: RedisService,
   ) {
     this.appointmentUrl = this.config.getOrThrow<string>('APPOINTMENT_SERVICE_URL');
+    this.patientUrl     = this.config.getOrThrow<string>('PATIENT_SERVICE_URL');
+    this.identityUrl    = this.config.getOrThrow<string>('IDENTITY_SERVICE_URL');
   }
 
   private cookieHeader(req: Request): string {
@@ -29,25 +36,60 @@ export class AppointmentsService {
   }
 
   async listarConsultas(query: string, req: Request): Promise<unknown> {
-    const params = new URLSearchParams(query);
+    const params   = new URLSearchParams(query);
     const idMedico = params.get('idMedico');
-    const cacheKey = idMedico ? `consultas:medico:${idMedico}` : null;
+    const cacheKey = idMedico ? `consultas:medico:${idMedico}` : 'consultas:lista';
 
-    if (cacheKey) {
-      const cached = await this.redis.get(cacheKey);
-      if (cached) return cached;
-    }
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return cached;
 
     const path = '/consultas';
-    const qs = query ? `?${query}` : '';
+    const qs   = query ? `?${query}` : '';
     const headers = { ...this.hmac.gerarHeaders('GET', path), cookie: this.cookieHeader(req) };
-    const data = await this.get(`${this.appointmentUrl}${path}${qs}`, headers);
+    const raw  = await this.get(`${this.appointmentUrl}${path}${qs}`, headers) as { itens: ConsultaRaw[]; total: number };
 
-    if (cacheKey && data !== undefined) {
-      await this.redis.set(cacheKey, data, TTL_CONSULTA);
-    }
+    const itens = raw?.itens ?? [];
+    const pacienteIds = [...new Set(itens.map(c => c.idPaciente))];
+    const medicoIds   = [...new Set(itens.map(c => c.idMedico))];
 
-    return data;
+    const [nomesPaciente, nomesMedico] = await Promise.all([
+      Promise.all(pacienteIds.map(id => this.fetchNomePaciente(id, req))),
+      Promise.all(medicoIds.map(id   => this.fetchNomeMedico(id))),
+    ]);
+
+    const mapPaciente = new Map(pacienteIds.map((id, i) => [id, nomesPaciente[i]]));
+    const mapMedico   = new Map(medicoIds.map((id, i)   => [id, nomesMedico[i]]));
+
+    const enriched = {
+      ...raw,
+      itens: itens.map(c => ({
+        ...c,
+        nomePaciente: mapPaciente.get(c.idPaciente) ?? '—',
+        nomeMedico:   mapMedico.get(c.idMedico)     ?? '—',
+      })),
+    };
+
+    await this.redis.set(cacheKey, enriched, TTL_CONSULTA);
+    return enriched;
+  }
+
+  private async fetchNomePaciente(id: string, req: Request): Promise<string> {
+    try {
+      const path    = `/pacientes/${id}`;
+      const headers = { ...this.hmac.gerarHeaders('GET', path), cookie: this.cookieHeader(req) };
+      const data    = await this.get(`${this.patientUrl}${path}`, headers) as NomeDto;
+      return `${data.primeiroNome} ${data.sobrenome}`;
+    } catch { return '—'; }
+  }
+
+  private async fetchNomeMedico(id: string): Promise<string> {
+    // Usa /interno para não depender do JWT do usuário logado (médico pode não ser Admin)
+    try {
+      const path    = `/usuarios/${id}/interno`;
+      const headers = this.hmac.gerarHeaders('GET', path);
+      const data    = await this.get(`${this.identityUrl}${path}`, headers) as NomeDto;
+      return `${data.primeiroNome} ${data.sobrenome}`;
+    } catch { return '—'; }
   }
 
   async obterConsulta(id: string, req: Request): Promise<unknown> {
