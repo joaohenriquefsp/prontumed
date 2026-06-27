@@ -66,24 +66,24 @@ pnpm run start:dev
 
 | Método | Rota | Roles | Descrição |
 |---|---|---|---|
-| `GET` | `/pacientes` | Doctor, Receptionist, Admin | Listar |
+| `GET` | `/pacientes` | Doctor, Receptionist, Admin | Listar (cache Redis `pacientes:lista`, TTL 60s) |
 | `GET` | `/pacientes/cpf/:cpf` | Doctor, Receptionist, Admin | Buscar por CPF |
-| `GET` | `/pacientes/:id` | Doctor, Receptionist, Admin | Obter por ID |
-| `POST` | `/pacientes` | Receptionist, Admin | Cadastrar |
-| `PUT` | `/pacientes/:id` | Receptionist, Admin | Atualizar |
-| `PATCH` | `/pacientes/:id/desativar` | Admin | Desativar (soft delete) |
+| `GET` | `/pacientes/:id` | Doctor, Receptionist, Admin | Obter por ID (cache Redis `paciente:{id}`, TTL 300s) |
+| `POST` | `/pacientes` | Receptionist, Admin | Cadastrar (invalida `pacientes:lista`) |
+| `PUT` | `/pacientes/:id` | Receptionist, Admin | Atualizar (invalida `paciente:{id}` + `pacientes:lista`) |
+| `PATCH` | `/pacientes/:id/desativar` | Admin | Desativar (invalida `paciente:{id}` + `pacientes:lista`) |
 
 ### Consultas
 
 | Método | Rota | Roles | Descrição |
 |---|---|---|---|
-| `GET` | `/consultas` | Doctor, Receptionist, Admin | Listar com filtros |
-| `GET` | `/consultas/:id` | Doctor, Receptionist, Admin | Obter por ID |
+| `GET` | `/consultas` | Doctor, Receptionist, Admin | Listar com filtros (cache Redis `consultas:medico:{id}`, TTL 60s, quando `idMedico` presente) |
+| `GET` | `/consultas/:id` | Doctor, Receptionist, Admin | Obter por ID (cache Redis `consulta:{id}`, TTL 60s) |
 | `POST` | `/consultas` | Receptionist, Admin | Agendar |
-| `PATCH` | `/consultas/:id/confirmar` | Receptionist, Admin | Confirmar |
-| `PATCH` | `/consultas/:id/cancelar` | Receptionist, Admin | Cancelar |
-| `PATCH` | `/consultas/:id/concluir` | Doctor | Concluir |
-| `PATCH` | `/consultas/:id/no-show` | Doctor, Admin | Registrar ausência |
+| `PATCH` | `/consultas/:id/confirmar` | Receptionist, Admin | Confirmar (invalida `consulta:{id}`) |
+| `PATCH` | `/consultas/:id/cancelar` | Receptionist, Admin | Cancelar (invalida `consulta:{id}`) |
+| `PATCH` | `/consultas/:id/concluir` | Doctor | Concluir (invalida `consulta:{id}`) |
+| `PATCH` | `/consultas/:id/no-show` | Doctor, Admin | Registrar ausência (invalida `consulta:{id}`) |
 | `GET` | `/disponibilidade` | Doctor, Receptionist, Admin | Slots disponíveis |
 
 ### Grade de Horários
@@ -108,15 +108,51 @@ pnpm run start:dev
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| `GET` | `/events` | JWT | Stream SSE — recebe notificações em tempo real quando dados do usuário logado mudam |
+| `GET` | `/events` | JWT | Stream SSE — notificações em tempo real |
 
-> O cliente conecta e mantém a conexão aberta. O BFF envia eventos do tipo `{ data: { tipo, idConsulta, idMedico, idPaciente } }` quando um evento Kafka invalida o cache do usuário. O frontend usa isso como sinal para refazer o fetch dos dados afetados.
+**Payload SSE enviado ao frontend:**
+```json
+{
+  "tipo": "ConsultaConfirmadaEvent",
+  "idConsulta": "3fa85f64-...",
+  "idMedico": "7cb12a31-...",
+  "idPaciente": "9de45f21-..."
+}
+```
+
+O BFF emite para o `userId` do médico (`idMedico`) e do paciente (`idPaciente`) envolvidos na consulta. O frontend exibe um toast correspondente ao tipo do evento.
 
 ### Health
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | `GET` | `/health` | — | Health check |
+
+---
+
+## Cache Redis
+
+| Chave | TTL | Criada em | Invalidada em |
+|---|---|---|---|
+| `pacientes:lista` | 60s | `GET /pacientes` | `POST/PUT/PATCH pacientes` + Kafka `prontumed.Paciente` |
+| `paciente:{id}` | 300s | `GET /pacientes/:id` | `PUT/PATCH pacientes/:id` + Kafka `prontumed.Paciente` |
+| `consultas:medico:{idMedico}` | 60s | `GET /consultas?idMedico=X` | Kafka `prontumed.Consulta` |
+| `consulta:{id}` | 60s | `GET /consultas/:id` | confirmar / cancelar / concluir / no-show + Kafka `prontumed.Consulta` |
+
+O Redis conecta no startup via `OnModuleInit` (`redis.service.ts`). Se o Redis estiver indisponível, o BFF degrada graciosamente: o erro é logado e as chamadas passam direto para os microsserviços.
+
+---
+
+## Kafka
+
+O `KafkaConsumerService` consome dois tópicos:
+
+| Tópico | Ação ao receber evento |
+|---|---|
+| `prontumed.Consulta` | Invalida chaves Redis de consulta + emite SSE ao médico e ao paciente |
+| `prontumed.Paciente` | Invalida chaves Redis de paciente |
+
+O consumer é desabilitado automaticamente se `KAFKA_BROKERS` não estiver configurado.
 
 ---
 
@@ -128,109 +164,14 @@ src/
 │   ├── decorators/     # CurrentUser, Roles
 │   ├── guards/         # JwtAuthGuard, RolesGuard
 │   ├── hmac/           # HmacService (assina chamadas internas)
-│   ├── redis/          # RedisService (cache read-through + invalidação)
+│   ├── redis/          # RedisService (cache read-through + invalidação via OnModuleInit)
 │   ├── events/         # EventsService + EventsController (GET /events SSE)
 │   └── kafka/          # KafkaConsumerService (consome prontumed.Consulta + prontumed.Paciente)
 └── modules/
     ├── auth/           # Login, refresh, logout, alterar-senha
     ├── users/          # Gestão de usuários (proxy → Identity Service)
-    ├── patients/       # Gestão de pacientes (proxy → Patient Service)
-    ├── appointments/   # Consultas e grade horária (proxy → Appointment Service)
+    ├── patients/       # Gestão de pacientes (proxy → Patient Service, com cache)
+    ├── appointments/   # Consultas e grade horária (proxy → Appointment Service, com cache)
     ├── medical-record/ # Prontuário (proxy → Medical Record Service)
     └── health/         # Health check
 ```
-
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ pnpm install
-```
-
-## Compile and run the project
-
-```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
