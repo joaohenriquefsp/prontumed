@@ -283,7 +283,7 @@ function NovoHorarioModal({
     const [hF, mF] = horaFim.split(":").map(Number);
     if (hF * 60 + mF <= hI * 60 + mI) { setErro("Horário de fim deve ser após o início."); return; }
     if (duracao < 10) { setErro("Duração mínima é 10 minutos."); return; }
-    void onSalvar({ idMedico, diaSemana, horaInicio, horaFim, duracaoMinutos: duracao });
+    void onSalvar({ idMedico, diaSemana, horarioInicio: horaInicio, horarioFim: horaFim, duracaoSlotMinutos: duracao });
   }
 
   return (

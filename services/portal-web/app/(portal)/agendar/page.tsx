@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { bff, ApiError } from "@/lib/api";
-import type { PacienteResumoDto, UsuarioDto, SlotDisponivel } from "@/lib/types";
+import type { PacienteResumoDto, PacienteListResponse, UsuarioDto, SlotDisponivel, DisponibilidadeResponse } from "@/lib/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -24,12 +24,8 @@ function formatData(iso: string) {
   return `${d}/${m}/${y}`;
 }
 
-// O endpoint pode retornar string[] ou SlotDisponivel[]
-function normalizeSlots(data: unknown[]): SlotDisponivel[] {
-  if (!data.length) return [];
-  if (typeof data[0] === "string")
-    return (data as string[]).map((h) => ({ horario: h, disponivel: true }));
-  return data as SlotDisponivel[];
+function slotParaHora(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 }
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -73,8 +69,8 @@ export default function AgendarPage() {
 
   // Carga inicial
   useEffect(() => {
-    bff<PacienteResumoDto[]>("/pacientes")
-      .then(setPacientes)
+    bff<PacienteListResponse>("/pacientes")
+      .then((r) => setPacientes(r.itens))
       .catch(() => setPacientes([]))
       .finally(() => setLoadingPac(false));
 
@@ -97,8 +93,8 @@ export default function AgendarPage() {
     setSlots([]);
     setForm((prev) => ({ ...prev, slot: null }));
 
-    bff<unknown[]>(`/disponibilidade?idMedico=${form.medico.id}&data=${form.data}`)
-      .then((d) => setSlots(normalizeSlots(d)))
+    bff<DisponibilidadeResponse>(`/disponibilidade?idMedico=${form.medico.id}&data=${form.data}`)
+      .then((r) => setSlots(r.slots ?? []))
       .catch(() => setSlots([]))
       .finally(() => setLoadingSlots(false));
   }, [form.medico?.id, form.data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -127,7 +123,8 @@ export default function AgendarPage() {
         body: JSON.stringify({
           idPaciente: form.paciente!.id,
           idMedico: form.medico!.id,
-          dataHora: `${form.data}T${form.slot}:00`,
+          agendadoPara: form.slot!,
+          duracaoMinutos: 30,
           observacoes: form.observacoes.trim() || undefined,
         }),
       });
@@ -334,32 +331,29 @@ export default function AgendarPage() {
                 <p className="text-[13px] text-pm-muted">
                   Nenhum horário disponível para esta data.
                 </p>
-              ) : slots.every((s) => !s.disponivel) ? (
-                <p className="text-[13px] text-pm-muted">
-                  Todos os horários estão ocupados nesta data.
-                </p>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {slots
-                    .filter((s) => s.disponivel)
-                    .map((s) => (
+                  {slots.map((s) => {
+                      const hora = slotParaHora(s.inicio);
+                      return (
                       <button
-                        key={s.horario}
-                        onClick={() => setForm((prev) => ({ ...prev, slot: s.horario }))}
+                        key={s.inicio}
+                        onClick={() => setForm((prev) => ({ ...prev, slot: s.inicio }))}
                         className={`px-4 py-2 text-[13px] rounded-xl border font-medium transition-all ${
-                          form.slot === s.horario
+                          form.slot === s.inicio
                             ? "text-white border-transparent"
                             : "bg-white border-pm-line text-pm-text hover:border-pm-green"
                         }`}
                         style={
-                          form.slot === s.horario
+                          form.slot === s.inicio
                             ? { backgroundColor: "var(--pm-green)" }
                             : {}
                         }
                       >
-                        {s.horario}
+                        {hora}
                       </button>
-                    ))}
+                      );
+                    })}
                 </div>
               )}
             </Passo>
@@ -438,7 +432,7 @@ export default function AgendarPage() {
                 <ResumoItem
                   icon={<Clock size={13} />}
                   label="Horário"
-                  valor={form.slot}
+                  valor={form.slot ? slotParaHora(form.slot) : null}
                 />
                 {form.observacoes.trim() && (
                   <ResumoItem
@@ -525,7 +519,7 @@ function TelaSuccesso({
                 Horário
               </p>
               <p className="text-[14px] font-semibold text-pm-text mt-0.5">
-                {form.slot ?? "—"}
+                {form.slot ? slotParaHora(form.slot) : "—"}
               </p>
             </div>
           </div>

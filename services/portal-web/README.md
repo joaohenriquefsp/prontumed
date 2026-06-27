@@ -127,10 +127,10 @@ As preferências são salvas em `localStorage` e restauradas pelo `ThemeProvider
 
 ## Autenticação
 
-- Cookie HttpOnly `access_token` (15min) + `refresh_token` (7d) — gerenciados pelo bff-web
+- Cookie HttpOnly `access_token` (cookie dura 1 dia; JWT dentro expira em 15 min) + `refresh_token` (7d) — gerenciados pelo bff-web
 - `lib/api.ts` intercepta 401 → tenta `POST /auth/refresh` → repete a chamada original → se falhar, redireciona para `/login`
 - `UserProvider` expõe o usuário via context (`useUser()`) para componentes que precisam do nome ou perfil
-- `middleware.ts` redireciona rotas protegidas sem cookie para `/login`
+- `middleware.ts` redireciona rotas protegidas **sem cookie** para `/login` — o cookie persiste 1 dia para que o middleware não redirecione antes do cliente conseguir chamar o refresh
 
 ---
 

@@ -5,7 +5,7 @@ import { Search, UserPlus, X } from "lucide-react";
 import { bff } from "@/lib/api";
 import { toast } from "@/lib/toast-store";
 import { useUser } from "@/components/providers/user-provider";
-import type { PacienteResumoDto, CriarPacientePayload } from "@/lib/types";
+import type { PacienteResumoDto, PacienteListResponse, CriarPacientePayload } from "@/lib/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -41,8 +41,8 @@ export default function PacientesPage() {
   const [showModal, setShowModal]       = useState(false);
 
   useEffect(() => {
-    bff<PacienteResumoDto[]>("/pacientes")
-      .then(setPacientes)
+    bff<PacienteListResponse>("/pacientes")
+      .then((r) => setPacientes(r.itens))
       .catch(() => setPacientes([]))
       .finally(() => setLoading(false));
   }, []);
