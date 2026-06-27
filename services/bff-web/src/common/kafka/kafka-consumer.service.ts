@@ -78,7 +78,7 @@ export class KafkaConsumerService implements OnApplicationBootstrap, OnApplicati
     const idPaciente = payload.idPaciente ?? payload.IdPaciente;
     const idConsulta = payload.idConsulta ?? payload.IdConsulta;
 
-    const keysToDelete: string[] = [];
+    const keysToDelete: string[] = ['consultas:lista'];
     if (idMedico) keysToDelete.push(`consultas:medico:${idMedico}`);
     if (idPaciente) keysToDelete.push(`consultas:paciente:${idPaciente}`);
     if (idConsulta) keysToDelete.push(`consulta:${idConsulta}`);
