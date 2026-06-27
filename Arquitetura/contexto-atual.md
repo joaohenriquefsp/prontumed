@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-23 (Portal Web — todas as telas implementadas em mock mode)
+> Última atualização: 2026-06-27 (Portal Web integrado ao bff-web real — mocks removidos; fixes de Redis e cache de consultas)
 
 ---
 
@@ -20,9 +20,9 @@ Sistema de gestão clínica baseado em microsserviços com comunicação orienta
 | Appointment Service | Microsserviço .NET 10 | 5003 | ✅ Concluído + code review aplicado |
 | Medical Record Service | Microsserviço .NET 10 | 5004 | ✅ Concluído (smoke test + PR mergeado) |
 | Notification Service | Worker .NET 10 | — | ✅ Concluído (smoke test ponta a ponta) |
-| bff-web | NestJS | 3000 | ✅ Concluído (Redis + Kafka + SSE) |
+| bff-web | NestJS | 3000 | ✅ Concluído (Redis + Kafka + SSE — fixes PR #34) |
 | bff-mobile | NestJS | 3001 | ✅ Concluído (Redis + Kafka + SSE) |
-| Portal Web | Next.js 14 | 3002 | ✅ Concluído (todas as telas — mock mode) |
+| Portal Web | Next.js 14 | 3002 | ✅ Concluído (todas as telas integradas ao bff-web real) |
 | App Mobile | React Native + Expo | — | ⏳ |
 
 ---
@@ -316,32 +316,48 @@ Acesse a documentação de cada serviço (exceto Notification, que não tem API 
 
 ---
 
-### ✅ Portal Web (`services/portal-web/`) — completo em mock mode
+### ✅ Portal Web (`services/portal-web/`) — integrado ao bff-web real
 
 Frontend web do sistema. Next.js 14 App Router, TypeScript, Tailwind CSS puro com design system via CSS custom properties (`--pm-*`). Porta 3002 em dev.
 
-**Todas as 11 telas implementadas em mock mode** — prontas para substituir as chamadas `bff()` por respostas reais assim que os BFFs estiverem rodando.
+**Todas as 11 telas implementadas e integradas ao bff-web real** — mocks removidos, mock mode desativado por padrão no `.env.local`.
 
 | Rota | Tela | Roles | Status |
 |---|---|---|---|
-| `/login` | Login | — | ✅ Completo |
-| `/agenda` | Agenda de Hoje (timeline) | Doctor, Admin | ✅ Completo |
-| `/pacientes` | Lista de Pacientes | Receptionist, Admin | ✅ Completo |
-| `/agendar` | Agendar Consulta (wizard 4 passos) | Receptionist, Admin | ✅ Completo |
-| `/configuracoes` | Tema de cor + preset de sidebar | todos | ✅ Completo |
-| `/consultas` | Consultas (tabela + filtros por status + ações) | Receptionist, Admin | ✅ Completo |
-| `/proximas` | Próximas Consultas (agrupadas por dia) | Doctor | ✅ Completo |
-| `/perfil` | Meu Perfil (editar nome + alterar senha) | todos | ✅ Completo |
-| `/usuarios` | Gestão de Usuários (CRUD + modal criar) | Admin | ✅ Completo |
-| `/grade` | Grade Horária (faixas por dia da semana) | Admin, Doctor | ✅ Completo |
-| `/prontuarios` | Prontuários (event sourcing — lista + entradas) | Doctor | ✅ Completo |
+| `/login` | Login | — | ✅ Integrado |
+| `/agenda` | Agenda de Hoje (timeline) | Doctor, Admin | ✅ Integrado |
+| `/pacientes` | Lista de Pacientes + modal criar | Receptionist, Admin | ✅ Integrado |
+| `/agendar` | Agendar Consulta (wizard 4 passos) | Receptionist, Admin | ✅ Integrado |
+| `/configuracoes` | Tema de cor + preset de sidebar | todos | ✅ Integrado |
+| `/consultas` | Consultas (tabela + filtros + ações completas) | Receptionist, Admin | ✅ Integrado |
+| `/proximas` | Próximas Consultas (agrupadas por dia) | Doctor | ✅ Integrado |
+| `/perfil` | Meu Perfil (editar nome + alterar senha) | todos | ✅ Integrado |
+| `/usuarios` | Gestão de Usuários (CRUD + modal criar) | Admin | ✅ Integrado |
+| `/grade` | Grade Horária (faixas por dia da semana) | Admin, Doctor | ✅ Integrado |
+| `/prontuarios` | Prontuários (event sourcing — lista + entradas) | Doctor | ✅ Integrado |
+
+**PRs de integração mergeados (2026-06-23 a 2026-06-24):**
+
+| PR | Escopo |
+|---|---|
+| #30 | Integração de `/agenda`, `/agendar`, `/pacientes`, `/proximas` com bff-web |
+| #31 | Integração de `/consultas` (confirmar, cancelar, concluir, no-show), `/grade`, `/usuarios` |
+| #32 | Integração de `/perfil` (salvar nome, alterar senha) |
+| #33 | Integração de `/prontuarios` — `handleAdicionarEntrada` chamava `POST /prontuarios/:id/entradas` no bff (era mock local) |
+
+**Infraestrutura real-time adicionada:**
+- `hooks/use-sse.ts` — EventSource com reconnect exponencial (2s→30s), `withCredentials: true`
+- `lib/toast-store.ts` — zustand store de toasts com auto-dismiss 5s
+- `components/shared/toast-container.tsx` — UI de toasts (4 variantes: info/success/warning/error)
+- `components/providers/sse-provider.tsx` — liga SSE ao toast; só ativa com usuário autenticado e mock desativado
+- `app/(portal)/layout.tsx` — inclui `<SseProvider>` + `<ToastContainer />`
 
 **Decisões de implementação:**
 - Design system com 6 paletas de cor e 3 presets de sidebar, todos trocáveis em tempo real via CSS custom properties (sem rebuild)
 - `lib/api.ts` — wrapper de fetch com cookie HttpOnly (`credentials: include`) e lógica de refresh automático em 401
-- `UserProvider` — carrega `GET /usuarios/me` no mount e expõe o usuário logado via context (necessário porque o JWT está em cookie HttpOnly inacessível ao JS)
-- Mock mode (`MOCK_AUTH=true` + `NEXT_PUBLIC_MOCK_AUTH=true` no `.env.local`) — bypass de middleware + dados fictícios sem backend rodando; desativar para produção
-- Perfil mock padrão: Admin (Carlos Mendes) — vê todas as rotas do menu
+- `UserProvider` — carrega `GET /usuarios/me` no mount e expõe o usuário logado via context
+- Mock mode (`MOCK_AUTH=true` + `NEXT_PUBLIC_MOCK_AUTH=true` no `.env.local`) — bypass de middleware + dados fictícios; **desativado por padrão** (`false`)
+- Perfil mock padrão (quando ativo): Admin (Carlos Mendes)
 
 **Como rodar:**
 ```bash
@@ -353,19 +369,76 @@ Ver `services/portal-web/README.md` para documentação completa.
 
 ---
 
-## Próximos serviços: BFF Web e BFF Mobile
+### ✅ bff-web — fixes de Redis e cache (PR #34, 2026-06-24)
+
+Dois bugs críticos corrigidos que impediam o Redis de funcionar de ponta a ponta:
+
+| Arquivo | Bug | Fix |
+|---|---|---|
+| `common/redis/redis.service.ts` | `lazyConnect: true` sem chamar `.connect()` — Redis nunca conectava de fato no startup | Implementa `OnModuleInit`; chama `client.connect()` com log de sucesso/erro |
+| `modules/appointments/appointments.service.ts` | `listarConsultas()` não escrevia no cache — o Kafka consumer invalidava chaves que nunca existiam | Cache com chave `consultas:medico:{idMedico}` (TTL 60s) alinhada ao que o consumer já invalida |
+
+**Estado atual do ciclo Redis + Kafka + SSE:**
+- `GET /pacientes` e `GET /pacientes/:id` → cache `pacientes:lista` / `paciente:{id}` ✅ (já estava correto)
+- `GET /consultas?idMedico=X` → cache `consultas:medico:{idMedico}` ✅ (fix PR #34)
+- `GET /consultas/:id` → cache `consulta:{id}` ✅ (já estava correto)
+- Kafka `prontumed.Consulta` → invalida cache de consultas + emite SSE ao médico e paciente ✅
+- Kafka `prontumed.Paciente` → invalida cache de pacientes ✅ (SSE para pacientes não implementado — ver nota abaixo)
+- `GET /events` (SSE) → frontend recebe toast ao vivo quando status de consulta muda ✅
+
+> **Nota sobre SSE de pacientes:** eventos Kafka de paciente (`prontumed.Paciente`) só invalidam cache — não emitem SSE. O `EventsService` emite por `userId` específico, e o payload do evento de paciente não carrega quais admins/recepcionistas devem ser notificados. O frontend também não define `TipoEventoSSE` para eventos de paciente. Gap documentado — baixo impacto no MVP (cache com TTL 60s garante dados frescos).
+
+---
+
+## Próximo passo: Validação do ambiente completo (Redis + SSE + Kafka)
+
+**Status:** implementado, aguardando validação manual com a stack completa rodando.
+
+### Checklist de validação
+
+**Redis:**
+```bash
+# 1. Subir stack e logar
+docker compose up -d
+
+# 2. Acessar agenda de um médico no portal (GET /consultas?idMedico=<uuid>)
+# 3. Verificar chave criada:
+docker exec prontumed-redis redis-cli KEYS "consultas:*"
+docker exec prontumed-redis redis-cli TTL "consultas:medico:<uuid>"
+
+# 4. Segunda requisição deve ser servida do cache (sem log do Appointment Service)
+```
+
+**Kafka → invalidação de cache:**
+```bash
+# 1. Confirmar ou cancelar uma consulta no portal
+# 2. Chave deve desaparecer do Redis:
+docker exec prontumed-redis redis-cli KEYS "consultas:*"
+# 3. Próxima requisição recria a chave do microsserviço
+```
+
+**SSE → toast no browser:**
+1. Abrir o portal em dois navegadores (médico + recepcionista)
+2. Recepcionista confirma uma consulta
+3. Médico deve ver toast "Consulta confirmada" em tempo real
+4. Kafka UI (http://localhost:8080) deve mostrar evento `prontumed.Consulta`
+5. smtp4dev (http://localhost:5080) deve mostrar e-mail enviado ao paciente
+
+---
+
+## Próximos serviços: BFF Mobile e App Mobile
 
 Dois BFFs NestJS dedicados — um por tipo de cliente (padrão BFF de Sam Newman). Código compartilhado extraído para um pacote interno `@prontumed/bff-core` (HMAC, HTTP clients, guards base).
 
-### bff-web (implementar primeiro)
-**Tipo:** NestJS | **Porta:** `3000` | **Branch:** `feat/bff-web`
+### bff-mobile ✅ (já implementado)
+**Tipo:** NestJS | **Porta:** `3001` | Ver `services/bff-mobile/README.md`
 
-Atende o Portal Web com todos os perfis: Doctor, Receptionist, Admin, Patient. Consome todos os microsserviços: Identity, Patient, Appointment, Medical Record.
+Atende o App Mobile com perfis Doctor e Patient. Consome Identity, Patient e Appointment.
 
-### bff-mobile (implementar depois)
-**Tipo:** NestJS | **Porta:** `3001` | **Branch:** `feat/bff-mobile`
-
-Atende o App Mobile com perfis Doctor e Patient. Consome Identity, Patient e Appointment (sem Medical Record na v1 — prontuário completo é funcionalidade do Portal Web).
+### App Mobile ⏳ (próximo)
+**Tipo:** React Native + Expo  
+Telas: Agenda, Consultas, Pacientes, Perfil, Notificações.  
+Consome bff-mobile (porta 3001).
 
 Ver seção "Camada de Entrada — BFF NestJS" em `Arquitetura/arquitetura-software.md` para o desenho completo.
 
