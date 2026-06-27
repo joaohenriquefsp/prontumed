@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-27 (Validação e2e completa — todos os endpoints validados via BFF; fixes HMAC e DTO bff-web; Notification Service Confluent.Kafka confirmado funcional)
+> Última atualização: 2026-06-27 (Validação e2e completa; fixes de tipos no portal-web; fix de cookie no Identity Service — sessão mantida após expiração do JWT)
 
 ---
 
@@ -419,6 +419,41 @@ Todos os endpoints de todos os microsserviços foram validados via BFF com a sta
 ### Notification Service — Confluent.Kafka (Windows)
 
 O consumer Confluent.Kafka não conectava com `BootstrapServers: localhost:9092` em sessões anteriores. Fix: usar `127.0.0.1:9092` em `appsettings.Development.json`. Confirmado funcional — consumer group `notification-service` ativo, todos os eventos sendo consumidos.
+
+---
+
+---
+
+## ✅ Fixes portal-web (tipos + DTOs) — 2026-06-27
+
+Bugs de integração descobertos durante a validação browser-a-browser das telas do portal-web. Todos os tipos em `lib/types.ts` divergiam dos contratos reais do bff-web.
+
+### Arquivos corrigidos
+
+| Arquivo | Bug | Fix |
+|---|---|---|
+| `lib/types.ts` | Tipo `TipoEntrada` incluía `SolicitacaoExame` — valor inexistente no domínio do Medical Record | Substituído por `Exame` |
+| `lib/types.ts` | `AdicionarEntradaPayload.tipo` — campo errado | Renomeado para `tipoEntrada` |
+| `lib/types.ts` | `AgendarConsultaPayload.dataHora` — campo errado, `duracaoMinutos` ausente | Renomeado para `agendadoPara`, adicionado `duracaoMinutos` |
+| `lib/types.ts` | `SlotDisponivel` tinha `horario` e `disponivel` — formato antigo de mock | Substituído por `{ inicio, fim, duracaoMinutos }` + wrapper `DisponibilidadeResponse` |
+| `lib/types.ts` | `CriarGradeHorarioPayload`: `horaInicio`, `horaFim`, `duracaoMinutos` — nomes errados | Renomeados para `horarioInicio`, `horarioFim`, `duracaoSlotMinutos` |
+| `lib/types.ts` | `PacienteListResponse` ausente — BFF retorna `{ total, itens }` não array puro | Interface adicionada |
+| `pacientes/page.tsx` | `pacientes.filter is not a function` — fetch chamava `setPacientes` diretamente com `{ total, itens }` | `.then(r => setPacientes(r.itens))` |
+| `agendar/page.tsx` | 4 bugs: fetch de pacientes, fetch de disponibilidade, chave/label de slot, payload do agendamento | Todos corrigidos para alinhar com BFF real |
+| `grade/page.tsx` | Payload usava `horaInicio`, `horaFim`, `duracaoMinutos` | Corrigido para `horarioInicio`, `horarioFim`, `duracaoSlotMinutos` |
+| `prontuarios/page.tsx` | `TIPO_CONFIG`/`TIPOS` com `SolicitacaoExame`; pacientes fetch direto; `onSalvar({ tipo })` | Corrigido para `Exame`, `.itens`, `tipoEntrada` |
+
+---
+
+## ✅ Fix Identity Service — cookie de sessão (2026-06-27)
+
+**Problema:** usuário era deslogado a cada 15 minutos.
+
+**Causa raiz:** o cookie `access_token` tinha `Expires = +15min` — ao expirar, o browser o deletava. O `middleware.ts` do portal-web verifica `request.cookies.get('access_token')` a cada navegação de página: sem o cookie, redirecionava para `/login` **antes de o cliente ter chance de chamar `POST /auth/refresh`**.
+
+**Fix:** `IdentityService.Api/Controllers/AuthController.cs` — `access_token` cookie agora dura **1 dia** no browser; o JWT dentro dele continua expirando em 15 minutos (validado server-side pelo BFF). Com o cookie presente, o middleware deixa a página carregar, a API retorna 401, `bff()` chama `/auth/refresh`, e a sessão é renovada transparentemente.
+
+**`refresh_token`:** removida a restrição `Path = "/auth/refresh"` — agora o cookie é enviado em todas as rotas, sem impacto de segurança dado que o BFF é o único servidor que recebe esses cookies (arquitetura HttpOnly).
 
 ---
 
