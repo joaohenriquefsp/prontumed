@@ -1,7 +1,7 @@
 import { IsInt, IsString, IsUUID, Max, Min } from 'class-validator';
 
 export class CriarGradeHorarioDto {
-  @IsUUID()
+  @IsUUID('loose')
   idMedico: string;
 
   @IsInt()
@@ -10,12 +10,12 @@ export class CriarGradeHorarioDto {
   diaSemana: number;
 
   @IsString()
-  horaInicio: string;
+  horarioInicio: string;
 
   @IsString()
-  horaFim: string;
+  horarioFim: string;
 
   @IsInt()
-  @Min(10)
-  duracaoMinutos: number;
+  @Min(15)
+  duracaoSlotMinutos: number;
 }

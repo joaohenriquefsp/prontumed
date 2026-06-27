@@ -1,11 +1,7 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsIn, IsString } from 'class-validator';
 
 export class AlterarPerfilDto {
-  @IsOptional()
   @IsString()
-  primeiroNome?: string;
-
-  @IsOptional()
-  @IsString()
-  sobrenome?: string;
+  @IsIn(['Admin', 'Doctor', 'Receptionist', 'Patient'])
+  novoPerfil!: string;
 }

@@ -100,7 +100,7 @@ Definidas em `appsettings.Development.json` (não versionado):
     "IdentityServiceUrl": "http://localhost:5001"
   },
   "Kafka": {
-    "BootstrapServers": "localhost:9092"
+    "BootstrapServers": "127.0.0.1:9092"
   },
   "Smtp": {
     "Host": "localhost",
@@ -110,6 +110,8 @@ Definidas em `appsettings.Development.json` (não versionado):
 ```
 
 `Kafka:GroupId` (`notification-service`) e `Kafka:TopicoConsultas` (`prontumed.Consulta`) já têm valores padrão em `appsettings.json`, só precisam ser sobrescritos em cenários não padrão.
+
+> **Windows — Confluent.Kafka:** usar `127.0.0.1:9092` em vez de `localhost:9092`. O Confluent.Kafka para .NET resolve `localhost` de forma diferente de `System.Net.Sockets.TcpClient`, e em alguns ambientes Windows falha silenciosamente na conexão com o broker enquanto o TCP no endereço está acessível. Usar o IP literal contorna o problema.
 
 ---
 

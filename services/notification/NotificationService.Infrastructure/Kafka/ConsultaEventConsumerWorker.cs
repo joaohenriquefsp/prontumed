@@ -34,10 +34,13 @@ public class ConsultaEventConsumerWorker(
             EnableAutoCommit = false,
         };
 
+        logger.LogInformation("Bootstrap: '{Bootstrap}' | Tópico: {Topico} | Grupo: {GroupId}",
+            settings.BootstrapServers, settings.TopicoConsultas, settings.GroupId);
+
         using var consumer = new ConsumerBuilder<string, string>(config).Build();
         consumer.Subscribe(settings.TopicoConsultas);
 
-        logger.LogInformation("Consumindo tópico {Topico} como grupo {GroupId}", settings.TopicoConsultas, settings.GroupId);
+        logger.LogInformation("Consumer criado. Aguardando mensagens...");
 
         while (!stoppingToken.IsCancellationRequested)
         {
