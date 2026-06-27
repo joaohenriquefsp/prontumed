@@ -241,6 +241,10 @@ Ver `services/notification/README.md` para documentação completa.
 
 ## Como retomar
 
+> **Pré-requisitos:** Docker Desktop, .NET 10 SDK, Node.js 20+, pnpm (`npm i -g pnpm`)
+
+---
+
 ### 1. Clonar e subir a infra
 ```bash
 git clone https://github.com/joaohenriquefsp/prontumed.git
@@ -248,14 +252,29 @@ cd prontumed
 docker compose up -d
 ```
 
-### 2. Registrar conectores Debezium (primeira vez)
+### 2. Aplicar seeds (primeira vez — usuários, pacientes e consultas de exemplo)
+```bash
+docker exec -i postgres-identity     psql -U clinicos -d db_identity      < infra/seeds/01-identity-seed.sql
+docker exec -i postgres-patients     psql -U clinicos -d db_patients      < infra/seeds/02-patients-seed.sql
+docker exec -i postgres-appointments psql -U clinicos -d db_appointments  < infra/seeds/03-appointments-seed.sql
+```
+
+Credenciais de acesso após os seeds:
+
+| Perfil | Email | Senha |
+|---|---|---|
+| Admin | `admin@prontumed.com` | `Prontumed@123` |
+| Doctor | `lucas@prontumed.com` | `Prontumed@123` |
+| Receptionist | `ana@prontumed.com` | `Prontumed@123` |
+
+### 3. Registrar conectores Debezium (primeira vez)
 ```bash
 bash infra/debezium/register-connectors.sh
 ```
 
-### 3. Criar `appsettings.Development.json` para cada serviço
+### 4. Criar `appsettings.Development.json` para cada serviço
 
-Cada serviço precisa de um arquivo local com credenciais (não está no git):
+Esses arquivos são gitignored — precisam ser criados manualmente. **As chaves JWT e HMAC devem ser idênticas em todos os serviços e no BFF.**
 
 **Identity** (`services/identity/IdentityService.API/appsettings.Development.json`):
 ```json
@@ -263,8 +282,8 @@ Cada serviço precisa de um arquivo local com credenciais (não está no git):
   "ConnectionStrings": {
     "DefaultConnection": "Host=localhost;Port=5432;Database=db_identity;Username=clinicos;Password=prontumed_secret"
   },
-  "Jwt": { "Chave": "chave-desenvolvimento-minimo-32-caracteres" },
-  "Hmac": { "Chave": "chave-hmac-compartilhada-com-o-bff" }
+  "Jwt": { "Chave": "prontumed-dev-jwt-chave-minimo-32-caracteres!!!" },
+  "Hmac": { "Chave": "prontumed-dev-hmac-chave-compartilhada-2026" }
 }
 ```
 
@@ -274,7 +293,7 @@ Cada serviço precisa de um arquivo local com credenciais (não está no git):
   "ConnectionStrings": {
     "DefaultConnection": "Host=localhost;Port=5433;Database=db_patients;Username=clinicos;Password=prontumed_secret"
   },
-  "Hmac": { "Chave": "chave-hmac-compartilhada-com-o-bff" }
+  "Hmac": { "Chave": "prontumed-dev-hmac-chave-compartilhada-2026" }
 }
 ```
 
@@ -285,34 +304,87 @@ Cada serviço precisa de um arquivo local com credenciais (não está no git):
     "DefaultConnection": "Host=localhost;Port=5434;Database=db_appointments;Username=clinicos;Password=prontumed_secret"
   },
   "Jwt": {
-    "Chave": "chave-desenvolvimento-minimo-32-caracteres",
+    "Chave": "prontumed-dev-jwt-chave-minimo-32-caracteres!!!",
     "Emissor": "prontumed-identity",
     "Audiencia": "prontumed-services"
   },
-  "Hmac": { "Chave": "chave-hmac-compartilhada-com-o-bff" }
+  "Hmac": { "Chave": "prontumed-dev-hmac-chave-compartilhada-2026" }
 }
 ```
 
-### 4. Rodar os serviços
-```bash
-# Identity (porta 5001)
-cd services/identity/IdentityService.API && dotnet run
-
-# Patient (porta 5002)
-cd services/patient/PatientService.API && dotnet run
-
-# Appointment (porta 5003)
-cd services/appointment/AppointmentService.API && dotnet run
-
-# Medical Record (porta 5004)
-cd services/medical-record/MedicalRecordService.API && dotnet run
-
-# Notification (worker, sem porta HTTP)
-# DOTNET_ENVIRONMENT=Development necessário para carregar appsettings.Development.json
-cd services/notification/NotificationService.Worker && DOTNET_ENVIRONMENT=Development dotnet run
+**Medical Record** (`services/medical-record/MedicalRecordService.API/appsettings.Development.json`):
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5435;Database=db_medical_records;Username=clinicos;Password=prontumed_secret"
+  },
+  "Jwt": { "Chave": "prontumed-dev-jwt-chave-minimo-32-caracteres!!!" },
+  "Hmac": { "Chave": "prontumed-dev-hmac-chave-compartilhada-2026" }
+}
 ```
 
-Acesse a documentação de cada serviço (exceto Notification, que não tem API REST) em `http://localhost:{porta}/scalar/v1`
+**Notification** (`services/notification/NotificationService.Worker/appsettings.Development.json`):
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5436;Database=db_notifications;Username=clinicos;Password=prontumed_secret"
+  },
+  "Hmac": { "Chave": "prontumed-dev-hmac-chave-compartilhada-2026" },
+  "ServicosInternos": {
+    "PatientServiceUrl": "http://localhost:5002",
+    "IdentityServiceUrl": "http://localhost:5001"
+  },
+  "Kafka": {
+    "BootstrapServers": "127.0.0.1:9092"
+  },
+  "Smtp": {
+    "Host": "localhost",
+    "Port": 2525
+  }
+}
+```
+
+> **Windows + Confluent.Kafka:** use `127.0.0.1:9092` no `BootstrapServers` do Notification — `localhost:9092` falha silenciosamente no Windows com a lib Confluent.Kafka.
+
+### 5. Criar `.env` para o BFF Web
+
+```bash
+cp services/bff-web/.env.example services/bff-web/.env
+```
+
+Editar `services/bff-web/.env` e preencher as chaves reais:
+```
+JWT_CHAVE=prontumed-dev-jwt-chave-minimo-32-caracteres!!!
+HMAC_CHAVE=prontumed-dev-hmac-chave-compartilhada-2026
+KAFKA_BROKERS=127.0.0.1:9092
+```
+
+### 6. Criar `.env.local` para o Portal Web
+
+```bash
+cp services/portal-web/.env.example services/portal-web/.env.local
+```
+
+O arquivo padrão já funciona para dev local (BFF em `http://localhost:3000`, mock desativado).
+
+### 7. Rodar os microsserviços (cada um em um terminal)
+```bash
+cd services/identity/IdentityService.API && dotnet run          # porta 5001
+cd services/patient/PatientService.API && dotnet run            # porta 5002
+cd services/appointment/AppointmentService.API && dotnet run    # porta 5003
+cd services/medical-record/MedicalRecordService.API && dotnet run  # porta 5004
+cd services/notification/NotificationService.Worker && dotnet run  # worker, sem porta HTTP
+```
+
+Scalar UI (exceto Notification): `http://localhost:{porta}/scalar/v1`
+
+### 8. Rodar o BFF Web e o Portal
+```bash
+cd services/bff-web  && pnpm install && pnpm start:dev   # porta 3000
+cd services/portal-web && pnpm install && pnpm dev        # porta 3002
+```
+
+Acesse: `http://localhost:3002`
 
 ---
 
