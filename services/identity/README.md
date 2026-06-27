@@ -12,10 +12,12 @@ Microsserviço de autenticação e gestão de usuários do ProntuMed. Emite e va
 
 O serviço usa **cookies HttpOnly** — não Bearer token no header. Isso protege contra ataques XSS, já que o JavaScript da página não consegue ler os cookies.
 
-| Cookie | Validade | Path | Conteúdo |
-|---|---|---|---|
-| `access_token` | 15 minutos | `/` | JWT assinado com a chave configurada |
-| `refresh_token` | 7 dias | `/auth/refresh` | Token opaco para renovar a sessão |
+| Cookie | Validade do cookie | Validade do JWT | Path | Conteúdo |
+|---|---|---|---|---|
+| `access_token` | 1 dia | 15 minutos | `/` | JWT assinado com a chave configurada |
+| `refresh_token` | 7 dias | — | `/` | Token opaco para renovar a sessão |
+
+> **Nota de design:** o cookie `access_token` dura 1 dia no browser, mas o JWT dentro dele expira em 15 minutos (validado server-side pelo BFF). Isso permite que o middleware Next.js detecte a presença do cookie e deixe a página carregar — a validade real é verificada na próxima chamada de API, que retorna `401` e aciona o fluxo de refresh automático em `lib/api.ts` do portal-web. Sem isso, o middleware redirecionaria para `/login` em toda navegação após os 15 minutos, antes de o cliente ter chance de chamar `POST /auth/refresh`.
 
 Chamadas de outros serviços internos (ex: BFF) precisam assinar cada request com **HMAC-SHA256** via headers:
 - `X-HMAC-Signature` — `HMAC-SHA256(METHOD + PATH + TIMESTAMP, chave_secreta)` em hex minúsculo

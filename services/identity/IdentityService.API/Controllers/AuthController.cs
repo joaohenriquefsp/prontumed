@@ -24,7 +24,10 @@ public class AuthController(IMediator mediator) : ControllerBase
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Expires = DateTimeOffset.UtcNow.AddMinutes(15)
+            // Cookie dura mais que o JWT (15 min) para o middleware Next.js
+            // não redirecionar para /login antes do cliente poder chamar /auth/refresh.
+            // A validade real do token é verificada server-side pelo BFF.
+            Expires = DateTimeOffset.UtcNow.AddDays(1)
         });
 
         Response.Cookies.Append("refresh_token", token.RefreshToken, new CookieOptions
@@ -32,7 +35,6 @@ public class AuthController(IMediator mediator) : ControllerBase
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Path = "/auth/refresh",
             Expires = token.ExpiraEm
         });
 
@@ -53,7 +55,7 @@ public class AuthController(IMediator mediator) : ControllerBase
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Expires = DateTimeOffset.UtcNow.AddMinutes(15)
+            Expires = DateTimeOffset.UtcNow.AddDays(1)
         });
 
         Response.Cookies.Append("refresh_token", token.RefreshToken, new CookieOptions
@@ -61,7 +63,6 @@ public class AuthController(IMediator mediator) : ControllerBase
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Path = "/auth/refresh",
             Expires = token.ExpiraEm
         });
 
