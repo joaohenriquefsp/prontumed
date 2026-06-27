@@ -4,12 +4,12 @@ export enum TipoEntrada {
   NotaConsulta = 'NotaConsulta',
   Diagnostico = 'Diagnostico',
   Prescricao = 'Prescricao',
-  SolicitacaoExame = 'SolicitacaoExame',
+  Exame = 'Exame',
 }
 
 export class AdicionarEntradaDto {
   @IsEnum(TipoEntrada)
-  tipo: TipoEntrada;
+  tipoEntrada: TipoEntrada;
 
   @IsString()
   @MinLength(3)

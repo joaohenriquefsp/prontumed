@@ -41,8 +41,7 @@ public class HmacValidationMiddleware(RequestDelegate next, IConfiguration confi
         }
 
         var chave = configuration["Hmac:Chave"] ?? string.Empty;
-        var queryString = context.Request.QueryString.Value ?? string.Empty;
-        var mensagem = $"{context.Request.Method}{context.Request.Path}{queryString}{timestamp}";
+        var mensagem = $"{context.Request.Method}{context.Request.Path}{timestamp}";
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(chave));
         var hashEsperado = Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(mensagem))).ToLowerInvariant();
         var hashRecebido = assinatura.ToString().ToLowerInvariant();

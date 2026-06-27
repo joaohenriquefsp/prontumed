@@ -1,14 +1,18 @@
-import { IsDateString, IsString, IsUUID, IsOptional } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class AgendarConsultaDto {
-  @IsUUID()
+  @IsUUID('loose')
   idPaciente: string;
 
-  @IsUUID()
+  @IsUUID('loose')
   idMedico: string;
 
   @IsDateString()
-  dataHora: string;
+  agendadoPara: string;
+
+  @IsInt()
+  @Min(10)
+  duracaoMinutos: number;
 
   @IsOptional()
   @IsString()

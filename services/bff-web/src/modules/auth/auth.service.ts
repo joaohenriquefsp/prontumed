@@ -36,7 +36,7 @@ export class AuthService {
       const setCookie = response.headers['set-cookie'];
       if (setCookie) {
         const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
-        cookies.forEach((c) => res.setHeader('Set-Cookie', c));
+        res.setHeader('Set-Cookie', cookies);
       }
 
       res.json(response.data);
@@ -63,7 +63,7 @@ export class AuthService {
       const setCookie = response.headers['set-cookie'];
       if (setCookie) {
         const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
-        cookies.forEach((c) => res.setHeader('Set-Cookie', c));
+        res.setHeader('Set-Cookie', cookies);
       }
 
       res.json(response.data);

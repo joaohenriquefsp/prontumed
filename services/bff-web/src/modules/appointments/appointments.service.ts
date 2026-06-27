@@ -40,7 +40,7 @@ export class AppointmentsService {
 
     const path = '/consultas';
     const qs = query ? `?${query}` : '';
-    const headers = { ...this.hmac.gerarHeaders('GET', path, qs ? query : ''), cookie: this.cookieHeader(req) };
+    const headers = { ...this.hmac.gerarHeaders('GET', path), cookie: this.cookieHeader(req) };
     const data = await this.get(`${this.appointmentUrl}${path}${qs}`, headers);
 
     if (cacheKey && data !== undefined) {
@@ -92,14 +92,14 @@ export class AppointmentsService {
   async disponibilidade(idMedico: string, data: string, req: Request): Promise<unknown> {
     const path = '/disponibilidade';
     const qs = `idMedico=${idMedico}&data=${data}`;
-    const headers = { ...this.hmac.gerarHeaders('GET', path, qs), cookie: this.cookieHeader(req) };
+    const headers = { ...this.hmac.gerarHeaders('GET', path), cookie: this.cookieHeader(req) };
     return this.get(`${this.appointmentUrl}${path}?${qs}`, headers);
   }
 
   async listarGradeHorarios(idMedico: string, req: Request): Promise<unknown> {
     const path = '/grade-horarios';
     const qs = idMedico ? `idMedico=${idMedico}` : '';
-    const headers = { ...this.hmac.gerarHeaders('GET', path, qs), cookie: this.cookieHeader(req) };
+    const headers = { ...this.hmac.gerarHeaders('GET', path), cookie: this.cookieHeader(req) };
     return this.get(`${this.appointmentUrl}${path}${qs ? '?' + qs : ''}`, headers);
   }
 

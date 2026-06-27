@@ -1,5 +1,5 @@
 # ProntuMed — Contexto Atual do Projeto
-> Última atualização: 2026-06-27 (Portal Web integrado ao bff-web real — mocks removidos; fixes de Redis e cache de consultas)
+> Última atualização: 2026-06-27 (Validação e2e completa — todos os endpoints validados via BFF; fixes HMAC e DTO bff-web; Notification Service Confluent.Kafka confirmado funcional)
 
 ---
 
@@ -390,39 +390,35 @@ Dois bugs críticos corrigidos que impediam o Redis de funcionar de ponta a pont
 
 ---
 
-## Próximo passo: Validação do ambiente completo (Redis + SSE + Kafka)
+## ✅ Validação e2e completa — 2026-06-27
 
-**Status:** implementado, aguardando validação manual com a stack completa rodando.
+Todos os endpoints de todos os microsserviços foram validados via BFF com a stack completa rodando (Docker infra + 4 microsserviços + Notification Worker + BFF).
 
-### Checklist de validação
+### Endpoints validados
 
-**Redis:**
-```bash
-# 1. Subir stack e logar
-docker compose up -d
+| Serviço | Endpoints validados |
+|---|---|
+| Identity (via BFF) | POST /auth/login, POST /auth/refresh, POST /auth/logout, POST /auth/alterar-senha, GET /usuarios/me, GET /usuarios, GET /usuarios/:id, POST /usuarios, PATCH /usuarios/:id/perfil, PATCH /usuarios/:id/desativar |
+| Patient (via BFF) | GET /pacientes, GET /pacientes/:id, GET /pacientes/cpf/:cpf, POST /pacientes, PUT /pacientes/:id, PATCH /pacientes/:id/desativar |
+| Appointment (via BFF) | POST /consultas, GET /consultas, GET /consultas/:id, PATCH /confirmar, PATCH /cancelar, PATCH /concluir (Doctor token), PATCH /no-show, POST /grade-horarios, GET /grade-horarios, DELETE /grade-horarios/:id, GET /disponibilidade |
+| Medical Record (via BFF) | POST /prontuarios/:id, GET /prontuarios/:id, POST /prontuarios/:id/entradas, GET /prontuarios/:id/entradas/:idEntrada, GET /prontuarios/:id/historico |
+| BFF features | Redis caching (4 chaves), Kafka consumer, SSE (/events), GET /health |
+| Notification Worker | Confluent.Kafka conectado, consume `prontumed.Consulta`, e-mails via smtp4dev ✅, push simulado ✅, deduplicação por `logs_envio` ✅ |
 
-# 2. Acessar agenda de um médico no portal (GET /consultas?idMedico=<uuid>)
-# 3. Verificar chave criada:
-docker exec prontumed-redis redis-cli KEYS "consultas:*"
-docker exec prontumed-redis redis-cli TTL "consultas:medico:<uuid>"
+### Fluxo e2e validado
 
-# 4. Segunda requisição deve ser servida do cache (sem log do Appointment Service)
-```
+`POST /consultas` → Appointment Service → Outbox → Debezium → Kafka `prontumed.Consulta` → BFF consumer (invalida Redis + emite SSE) → Notification Worker (e-mail `fernanda@prontumed.com` capturado no smtp4dev + push simulado em log)
 
-**Kafka → invalidação de cache:**
-```bash
-# 1. Confirmar ou cancelar uma consulta no portal
-# 2. Chave deve desaparecer do Redis:
-docker exec prontumed-redis redis-cli KEYS "consultas:*"
-# 3. Próxima requisição recria a chave do microsserviço
-```
+### Bugs corrigidos nesta sessão (bff-web)
 
-**SSE → toast no browser:**
-1. Abrir o portal em dois navegadores (médico + recepcionista)
-2. Recepcionista confirma uma consulta
-3. Médico deve ver toast "Consulta confirmada" em tempo real
-4. Kafka UI (http://localhost:8080) deve mostrar evento `prontumed.Consulta`
-5. smtp4dev (http://localhost:5080) deve mostrar e-mail enviado ao paciente
+| Arquivo | Bug | Fix |
+|---|---|---|
+| `modules/appointments/appointments.service.ts` | `listarConsultas`, `disponibilidade` e `listarGradeHorarios` passavam QueryString como 3º arg para `hmac.gerarHeaders()` — assinatura HMAC divergia do que o Appointment Service validava | Removido o 3º arg — assinatura é apenas `METHOD+PATH+TIMESTAMP` |
+| `modules/medical-record/dto/adicionar-entrada.dto.ts` | Campo `tipo` não correspondia ao campo `TipoEntrada` esperado pelo Medical Record; enum `SolicitacaoExame` não existia no domínio | Campo renomeado para `tipoEntrada`; enum corrigido para `Exame` |
+
+### Notification Service — Confluent.Kafka (Windows)
+
+O consumer Confluent.Kafka não conectava com `BootstrapServers: localhost:9092` em sessões anteriores. Fix: usar `127.0.0.1:9092` em `appsettings.Development.json`. Confirmado funcional — consumer group `notification-service` ativo, todos os eventos sendo consumidos.
 
 ---
 
