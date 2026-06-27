@@ -13,6 +13,11 @@ export interface UsuarioDto {
 
 // ── Pacientes ─────────────────────────────────────────────────────────────────
 
+export interface PacienteListResponse {
+  total: number;
+  itens: PacienteResumoDto[];
+}
+
 export interface CriarPacientePayload {
   primeiroNome: string;
   sobrenome: string;
@@ -67,13 +72,19 @@ export interface ConsultaListResponse {
 export interface AgendarConsultaPayload {
   idPaciente: string;
   idMedico: string;
-  dataHora: string;       // ISO 8601 — campo confirmado no AgendarConsultaDto
+  agendadoPara: string;   // ISO 8601
+  duracaoMinutos: number;
   observacoes?: string;
 }
 
 export interface SlotDisponivel {
-  horario: string;        // "09:00" ou ISO datetime
-  disponivel: boolean;
+  inicio: string;         // ISO datetime
+  fim: string;            // ISO datetime
+  duracaoMinutos: number;
+}
+
+export interface DisponibilidadeResponse {
+  slots: SlotDisponivel[];
 }
 
 // ── Consulta list (BFF enriquece com nomes para a listagem) ─────────────────
@@ -128,14 +139,14 @@ export interface GradeHorarioDto {
 export interface CriarGradeHorarioPayload {
   idMedico: string;
   diaSemana: number;
-  horaInicio: string;        // "HH:mm"
-  horaFim: string;           // "HH:mm"
-  duracaoMinutos: number;
+  horarioInicio: string;     // "HH:mm"
+  horarioFim: string;        // "HH:mm"
+  duracaoSlotMinutos: number;
 }
 
 // ── Prontuários (Event Sourcing) ──────────────────────────────────────────────
 
-export type TipoEntrada = 'NotaConsulta' | 'Diagnostico' | 'Prescricao' | 'SolicitacaoExame';
+export type TipoEntrada = 'NotaConsulta' | 'Diagnostico' | 'Prescricao' | 'Exame';
 
 export interface EntradaProntuarioDto {
   id: string;
@@ -151,7 +162,7 @@ export interface ProntuarioDto {
 }
 
 export interface AdicionarEntradaPayload {
-  tipo: TipoEntrada;
+  tipoEntrada: TipoEntrada;
   conteudo: string;
 }
 

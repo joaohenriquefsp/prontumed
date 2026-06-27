@@ -4,18 +4,18 @@ import { useState, useEffect } from "react";
 import { Search, Plus, FileText, Stethoscope, Pill, FlaskConical, ChevronDown, ChevronUp, X, AlertCircle } from "lucide-react";
 import { bff } from "@/lib/api";
 import { toast } from "@/lib/toast-store";
-import type { PacienteResumoDto, ProntuarioDto, EntradaProntuarioDto, TipoEntrada, AdicionarEntradaPayload } from "@/lib/types";
+import type { PacienteResumoDto, PacienteListResponse, ProntuarioDto, EntradaProntuarioDto, TipoEntrada, AdicionarEntradaPayload } from "@/lib/types";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
 const TIPO_CONFIG: Record<TipoEntrada, { label: string; icon: React.ElementType; color: string; bg: string }> = {
-  NotaConsulta:     { label: "Nota de Consulta",    icon: FileText,     color: "text-blue-600",    bg: "bg-blue-50"   },
-  Diagnostico:      { label: "Diagnóstico",          icon: Stethoscope,  color: "text-violet-600",  bg: "bg-violet-50" },
-  Prescricao:       { label: "Prescrição",           icon: Pill,         color: "text-emerald-600", bg: "bg-emerald-50"},
-  SolicitacaoExame: { label: "Solicitação de Exame", icon: FlaskConical, color: "text-amber-600",   bg: "bg-amber-50"  },
+  NotaConsulta: { label: "Nota de Consulta",    icon: FileText,     color: "text-blue-600",    bg: "bg-blue-50"   },
+  Diagnostico:  { label: "Diagnóstico",          icon: Stethoscope,  color: "text-violet-600",  bg: "bg-violet-50" },
+  Prescricao:   { label: "Prescrição",           icon: Pill,         color: "text-emerald-600", bg: "bg-emerald-50"},
+  Exame:        { label: "Exame",                icon: FlaskConical, color: "text-amber-600",   bg: "bg-amber-50"  },
 };
 
-const TIPOS: TipoEntrada[] = ["NotaConsulta", "Diagnostico", "Prescricao", "SolicitacaoExame"];
+const TIPOS: TipoEntrada[] = ["NotaConsulta", "Diagnostico", "Prescricao", "Exame"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -43,8 +43,8 @@ export default function ProntuariosPage() {
 
   // Carrega lista de pacientes
   useEffect(() => {
-    bff<PacienteResumoDto[]>("/pacientes")
-      .then(setPacientes)
+    bff<PacienteListResponse>("/pacientes")
+      .then((r) => setPacientes(r.itens))
       .catch(() => setPacientes([]))
       .finally(() => setLoadingPac(false));
   }, []);
@@ -306,7 +306,7 @@ function AdicionarEntradaModal({
       setErro("O conteúdo deve ter pelo menos 3 caracteres.");
       return;
     }
-    onSalvar({ tipo, conteudo: conteudo.trim() });
+    onSalvar({ tipoEntrada: tipo, conteudo: conteudo.trim() });
   }
 
   return (
